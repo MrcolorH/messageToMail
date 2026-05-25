@@ -21,7 +21,11 @@ import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
 import com.example.messagetomail.repository.EmailConfigRepository
 import com.example.messagetomail.Utils.AppLogger
+import com.example.messagetomail.Utils.WecomRobotSender
+import com.example.messagetomail.model.WecomRobotConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -54,8 +58,15 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnExportReceiver: Button
     private lateinit var btnImportReceiver: Button
 
+    private lateinit var cbEmailEnabled: android.widget.CheckBox
+    private lateinit var cbWecomEnabled: android.widget.CheckBox
+    private lateinit var etWecomKey: EditText
+    private lateinit var btnTestWecom: Button
+    private lateinit var tvWecomStatus: TextView
+
     private var currentSender: SenderConfig? = null
     private var currentReceivers: ReceiverConfig? = null
+    private var currentWecom: WecomRobotConfig? = null
     private var serviceRunning = false
 
     companion object {
@@ -98,6 +109,10 @@ class SettingsActivity : AppCompatActivity() {
             etNewReceiver.isEnabled = false
             btnAddReceiver.isEnabled = false
             btnImportReceiver.isEnabled = false
+            cbEmailEnabled.isEnabled = false
+            cbWecomEnabled.isEnabled = false
+            etWecomKey.isEnabled = false
+            btnTestWecom.isEnabled = false
         } else {
             tvServiceRunningBanner.visibility = TextView.GONE
         }
@@ -130,6 +145,12 @@ class SettingsActivity : AppCompatActivity() {
         btnAddReceiver = findViewById(R.id.btnAddReceiver)
         btnExportReceiver = findViewById(R.id.btnExportReceiver)
         btnImportReceiver = findViewById(R.id.btnImportReceiver)
+
+        cbEmailEnabled = findViewById(R.id.cbEmailEnabled)
+        cbWecomEnabled = findViewById(R.id.cbWecomEnabled)
+        etWecomKey = findViewById(R.id.etWecomKey)
+        btnTestWecom = findViewById(R.id.btnTestWecom)
+        tvWecomStatus = findViewById(R.id.tvWecomStatus)
     }
 
     private fun setupTabs() {
@@ -214,6 +235,48 @@ class SettingsActivity : AppCompatActivity() {
                 }.onFailure {
                     AppLogger.e("Settings", "配置导入失败: ${it.message}")
                     Toast.makeText(this@SettingsActivity, it.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        cbEmailEnabled.setOnCheckedChangeListener { _, isChecked ->
+            AppLogger.i("Settings", "邮件通知开关: $isChecked")
+            lifecycleScope.launch {
+                repository.setEmailEnabled(isChecked)
+            }
+        }
+
+        cbWecomEnabled.setOnCheckedChangeListener { _, isChecked ->
+            AppLogger.i("Settings", "企微通知开关: $isChecked")
+            lifecycleScope.launch {
+                repository.setWecomEnabled(isChecked)
+            }
+        }
+
+        btnTestWecom.setOnClickListener {
+            if (serviceRunning) {
+                Toast.makeText(this, "服务运行中，无法修改配置", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val key = etWecomKey.text.toString().trim()
+            if (key.isEmpty()) {
+                Toast.makeText(this, "请输入 Webhook Key", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            tvWecomStatus.text = "⏳ 正在测试企微机器人..."
+            btnTestWecom.isEnabled = false
+            lifecycleScope.launch {
+                val result = WecomRobotSender.send(key, "测试消息", "这是一条来自短信转邮件App的测试消息")
+                btnTestWecom.isEnabled = true
+                result.onSuccess {
+                    AppLogger.i("Settings", "企微机器人测试通过")
+                    Toast.makeText(this@SettingsActivity, "企微机器人测试成功", Toast.LENGTH_SHORT).show()
+                    tvWecomStatus.text = "✅ 企微机器人配置有效"
+                    repository.saveWecomConfig(WecomRobotConfig(key, cbWecomEnabled.isChecked))
+                }.onFailure {
+                    AppLogger.e("Settings", "企微机器人测试失败: ${it.message}")
+                    Toast.makeText(this@SettingsActivity, "测试失败：${it.message}", Toast.LENGTH_LONG).show()
+                    tvWecomStatus.text = "❌ 测试失败：${it.message}"
                 }
             }
         }
@@ -309,6 +372,22 @@ class SettingsActivity : AppCompatActivity() {
                         tvSenderStatus.text = status
                     }
                 }
+                launch {
+                    repository.emailEnabledFlow.collect { enabled ->
+                        cbEmailEnabled.isChecked = enabled
+                    }
+                }
+                launch {
+                    repository.wecomEnabledFlow.collect { enabled ->
+                        cbWecomEnabled.isChecked = enabled
+                    }
+                }
+                launch {
+                    repository.wecomConfigFlow.collect { config ->
+                        currentWecom = config
+                        refreshWecomUI(config)
+                    }
+                }
             }
         }
     }
@@ -354,6 +433,17 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun refreshWecomUI(config: WecomRobotConfig?) {
+        config ?: return
+        etWecomKey.setText(config.webhookKey)
+        val status = when {
+            serviceRunning -> "⚠️ 服务运行中"
+            config.webhookKey.isEmpty() -> "企微状态：未配置"
+            else -> "企微状态：已配置"
+        }
+        tvWecomStatus.text = status
+    }
+
     private fun saveSenderConfig() {
         val type = when (rgEmailType.checkedRadioButtonId) {
             R.id.rbNormal -> EmailType.NORMAL
@@ -385,7 +475,9 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             AppLogger.i("Settings", "开始验证 SMTP 连通性...")
-            val result = repository.verifySender(config)
+            val result = withContext(Dispatchers.IO) {
+                repository.verifySender(config)
+            }
             btnSaveSender.isEnabled = true
             result.onSuccess {
                 repository.saveSenderConfig(config)

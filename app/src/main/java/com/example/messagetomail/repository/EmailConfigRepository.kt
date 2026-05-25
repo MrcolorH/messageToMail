@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.messagetomail.model.EmailType
 import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
+import com.example.messagetomail.model.WecomRobotConfig
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -35,6 +36,9 @@ class EmailConfigRepository(private val context: Context) {
         val SENDER_CONFIG_KEY = stringPreferencesKey("sender_config")
         val RECEIVER_CONFIG_KEY = stringPreferencesKey("receiver_config")
         val CONFIG_VALID_KEY = booleanPreferencesKey("config_valid")
+        val WECOM_CONFIG_KEY = stringPreferencesKey("wecom_config")
+        val EMAIL_ENABLED_KEY = booleanPreferencesKey("email_enabled")
+        val WECOM_ENABLED_KEY = booleanPreferencesKey("wecom_enabled")
     }
 
     // === 读取 ===
@@ -48,6 +52,18 @@ class EmailConfigRepository(private val context: Context) {
 
     val configValidFlow: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[CONFIG_VALID_KEY] ?: false
+    }
+
+    val wecomConfigFlow: Flow<WecomRobotConfig?> = dataStore.data.map { prefs ->
+        prefs[WECOM_CONFIG_KEY]?.let { gson.fromJson(it, WecomRobotConfig::class.java) }
+    }
+
+    val emailEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[EMAIL_ENABLED_KEY] ?: true
+    }
+
+    val wecomEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[WECOM_ENABLED_KEY] ?: false
     }
 
     // === 写入 ===
@@ -69,6 +85,24 @@ class EmailConfigRepository(private val context: Context) {
         }
     }
 
+    suspend fun saveWecomConfig(config: WecomRobotConfig) {
+        dataStore.edit { prefs ->
+            prefs[WECOM_CONFIG_KEY] = gson.toJson(config)
+        }
+    }
+
+    suspend fun setEmailEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[EMAIL_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setWecomEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[WECOM_ENABLED_KEY] = enabled
+        }
+    }
+
     // === 阻塞读取（供同步调用使用） ===
     fun getSenderConfigBlocking(): SenderConfig? = runBlocking {
         senderConfigFlow.first()
@@ -80,6 +114,18 @@ class EmailConfigRepository(private val context: Context) {
 
     fun isConfigValidBlocking(): Boolean = runBlocking {
         configValidFlow.first()
+    }
+
+    fun getWecomConfigBlocking(): WecomRobotConfig? = runBlocking {
+        wecomConfigFlow.first()
+    }
+
+    fun isEmailEnabledBlocking(): Boolean = runBlocking {
+        emailEnabledFlow.first()
+    }
+
+    fun isWecomEnabledBlocking(): Boolean = runBlocking {
+        wecomEnabledFlow.first()
     }
 
     // === 清空 ===
@@ -94,6 +140,8 @@ class EmailConfigRepository(private val context: Context) {
                 put("mail.smtp.host", config.smtpHost)
                 put("mail.smtp.port", config.smtpPort)
                 put("mail.smtp.auth", "true")
+                put("mail.smtp.connectiontimeout", "10000")
+                put("mail.smtp.timeout", "10000")
                 if (config.useSsl) {
                     put("mail.smtp.ssl.enable", "true")
                 } else {
@@ -110,7 +158,16 @@ class EmailConfigRepository(private val context: Context) {
             transport.close()
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(e)
+            val errorMsg = when {
+                e is javax.mail.AuthenticationFailedException -> "账号或授权码错误"
+                e is java.net.UnknownHostException -> "无法连接SMTP服务器，请检查网络"
+                e is java.net.SocketTimeoutException -> "连接超时，请检查网络或端口配置"
+                e is java.net.ConnectException -> "连接被拒绝，请检查SMTP服务器地址和端口"
+                e.message?.contains("SSL", ignoreCase = true) == true -> "SSL连接失败，请检查端口和加密设置"
+                e.message?.isNotBlank() == true -> e.message!!
+                else -> "验证失败(${e.javaClass.simpleName})"
+            }
+            Result.failure(Exception(errorMsg, e))
         }
     }
 

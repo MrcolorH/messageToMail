@@ -204,6 +204,67 @@
                 android:layout_marginTop="8dp"
                 android:text="状态：未配置"
                 android:textSize="12sp" />
+
+            <!-- 分隔线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="24dp"
+                android:background="@android:color/darker_gray" />
+
+            <!-- 通知渠道 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="通知渠道"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <CheckBox
+                android:id="@+id/cbEmailEnabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:checked="true"
+                android:text="启用邮件通知" />
+
+            <CheckBox
+                android:id="@+id/cbWecomEnabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="启用企业微信机器人通知" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="企业微信 Webhook Key"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/etWecomKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="粘贴机器人Webhook中的key部分"
+                android:inputType="text" />
+
+            <Button
+                android:id="@+id/btnTestWecom"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="测试企微机器人" />
+
+            <TextView
+                android:id="@+id/tvWecomStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="4dp"
+                android:text="企微状态：未配置"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- 收件人配置面板 -->

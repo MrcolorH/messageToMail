@@ -24,14 +24,13 @@ class EmailService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        AppLogger.i("EmailService", "EmailService created")
+        AppLogger.i("EmailService", "EmailService onCreate")
         NotificationHelper.createNotificationChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        AppLogger.i("EmailService", "EmailService started, startId=$startId")
+        AppLogger.i("EmailService", "EmailService onStartCommand, startId=$startId")
 
-        // 启动前台服务
         val notification = NotificationHelper.createForegroundNotification(
             this,
             "短信转邮件服务",
@@ -40,23 +39,21 @@ class EmailService : Service() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForeground(FOREGROUND_SERVICE_ID, notification)
-            AppLogger.d("EmailService", "前台服务已启动 (通知ID=$FOREGROUND_SERVICE_ID)")
+            AppLogger.d("EmailService", "前台服务已启动")
         }
 
-        // 获取传递的参数
         val devicePhone = intent?.getStringExtra(EXTRA_DEVICE_PHONE)
         val sender = intent?.getStringExtra(EXTRA_SENDER)
         val messageBody = intent?.getStringExtra(EXTRA_MESSAGE_BODY)
 
-        AppLogger.i("EmailService", "收到参数: devicePhone=$devicePhone, sender=$sender, bodyLength=${messageBody?.length}")
+        AppLogger.i("EmailService", "参数: devicePhone=$devicePhone, sender=$sender, bodyLength=${messageBody?.length}")
 
         if (devicePhone != null && sender != null && messageBody != null) {
-            // 在协程中发送邮件
             serviceScope.launch {
                 try {
-                    AppLogger.i("EmailService", "开始调用 sendEmail 发送邮件")
+                    AppLogger.i("EmailService", "开始发送邮件...")
                     sendEmail(this@EmailService, devicePhone, sender, messageBody)
-                    AppLogger.i("EmailService", "邮件发送完成")
+                    AppLogger.i("EmailService", "邮件发送流程结束")
 
                     NotificationHelper.showNotification(
                         this@EmailService,
@@ -65,7 +62,7 @@ class EmailService : Service() {
                         2001
                     )
                 } catch (e: Exception) {
-                    AppLogger.e("EmailService", "邮件发送失败", e)
+                    AppLogger.e("EmailService", "邮件发送异常", e)
 
                     NotificationHelper.showNotification(
                         this@EmailService,
@@ -85,7 +82,7 @@ class EmailService : Service() {
                 }
             }
         } else {
-            AppLogger.e("EmailService", "缺少必要参数: devicePhone=${devicePhone != null}, sender=${sender != null}, messageBody=${messageBody != null}")
+            AppLogger.e("EmailService", "缺少必要参数")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -104,6 +101,6 @@ class EmailService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        AppLogger.i("EmailService", "EmailService destroyed")
+        AppLogger.i("EmailService", "EmailService onDestroy")
     }
 }

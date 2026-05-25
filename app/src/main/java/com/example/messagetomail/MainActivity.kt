@@ -16,7 +16,6 @@ import com.example.messagetomail.model.LogViewModel
 import com.example.messagetomail.repository.EmailConfigRepository
 import com.example.messagetomail.Utils.AppLogger
 import android.Manifest
-import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import com.example.messagetomail.Utils.NotificationHelper
@@ -26,7 +25,6 @@ import androidx.appcompat.app.AlertDialog
 
 
 class MainActivity : AppCompatActivity() {
-    var smsReceiver= SmsReceiver()
     private var isServiceRunning = false
     private lateinit var viewModel: LogViewModel
     private val SMS_PERMISSION_REQUEST_CODE = 123
@@ -87,12 +85,16 @@ class MainActivity : AppCompatActivity() {
                 AppLogger.i("MainActivity", "权限检查结果: result=$result")
                 if (result) {
                     isServiceRunning = !isServiceRunning
-                    registerSmsReceiver()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(SmsObserverService.createIntent(this))
+                    } else {
+                        startService(SmsObserverService.createIntent(this))
+                    }
                     Toast.makeText(this, "服务已开启", Toast.LENGTH_SHORT).show()
                     toggleButton.text = "关闭服务"
                     viewModel.setContent("服务启用")
                     btnSettings.isEnabled = false
-                    AppLogger.i("MainActivity", "服务已开启，短信接收器已注册")
+                    AppLogger.i("MainActivity", "服务已开启，短信监听服务已启动")
                 } else {
                     Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
                     AppLogger.e("MainActivity", "启动失败：权限不足")
@@ -100,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 AppLogger.i("MainActivity", "用户点击关闭服务")
                 isServiceRunning = !isServiceRunning
+                stopService(Intent(this, SmsObserverService::class.java))
                 toggleButton.text = "开启服务"
                 Toast.makeText(this, "服务已关闭", Toast.LENGTH_SHORT).show()
                 viewModel.setContent("服务停用")
@@ -190,7 +193,6 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.READ_SMS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // 无短信权限时需要获取，这个不知道为啥不弹窗
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.READ_SMS),
@@ -198,16 +200,8 @@ class MainActivity : AppCompatActivity() {
             )
             return false
         } else {
-            registerSmsReceiver()
             return true
         }
-    }
-
-    private fun registerSmsReceiver() {
-        val intentFilter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
-        intentFilter.priority = 1000
-        registerReceiver(smsReceiver, intentFilter)
-        AppLogger.i("SmsService", "短信接收器已注册，priority=1000")
     }
 
     /**
