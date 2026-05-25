@@ -1,4 +1,4 @@
-package com.example.v11
+package com.example.messagetomail
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,8 +10,8 @@ import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import android.Manifest
-import com.example.v11.Utils.NotificationHelper
-import com.example.v11.model.LogViewModel
+import com.example.messagetomail.Utils.NotificationHelper
+import com.example.messagetomail.model.LogViewModel
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {

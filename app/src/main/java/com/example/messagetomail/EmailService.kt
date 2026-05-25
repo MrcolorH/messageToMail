@@ -1,12 +1,12 @@
-package com.example.v11
+package com.example.messagetomail
 
 import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import com.example.v11.Utils.NotificationHelper
-import com.example.v11.Utils.sendEmail
+import com.example.messagetomail.Utils.NotificationHelper
+import com.example.messagetomail.Utils.sendEmail
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

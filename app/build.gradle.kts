@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.v11"
+    namespace = "com.example.messagetomail"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.v11"
+        applicationId = "com.example.messagetomail"
         minSdk = 27  // 降低到Android 8.1以提高兼容性
         targetSdk = 35
         versionCode = 1

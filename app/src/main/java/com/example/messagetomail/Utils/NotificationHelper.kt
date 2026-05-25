@@ -1,4 +1,4 @@
-package com.example.v11.Utils
+package com.example.messagetomail.Utils
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -6,7 +6,7 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.example.v11.R
+import com.example.messagetomail.R
 
 object NotificationHelper {
     private const val CHANNEL_ID = "sms_email_channel"

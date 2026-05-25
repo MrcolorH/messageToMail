@@ -1,4 +1,4 @@
-package com.example.v11
+package com.example.messagetomail
 
 import android.content.pm.PackageManager
 import android.os.Build
@@ -12,9 +12,9 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
-import com.example.v11.databinding.ActivityMainBinding
-import com.example.v11.model.LogViewModel
-import com.example.v11.Utils.NotificationHelper
+import com.example.messagetomail.databinding.ActivityMainBinding
+import com.example.messagetomail.model.LogViewModel
+import com.example.messagetomail.Utils.NotificationHelper
 import android.content.Intent
 import android.net.Uri
 import androidx.appcompat.app.AlertDialog

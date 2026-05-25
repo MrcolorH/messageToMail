@@ -1,9 +1,9 @@
-package com.example.v11
+package com.example.messagetomail
 
 import android.app.Application
 import androidx.multidex.MultiDex
 import androidx.multidex.MultiDexApplication
-import com.example.v11.Utils.NotificationHelper
+import com.example.messagetomail.Utils.NotificationHelper
 
 class MyApplication : MultiDexApplication() {
     

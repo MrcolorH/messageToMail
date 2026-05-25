@@ -1,4 +1,4 @@
-package com.example.v11
+package com.example.messagetomail
 
 import org.junit.Test
 

@@ -5,7 +5,7 @@
     <data>
         <variable
             name="logText"
-            type="com.example.v11.model.LogViewModel" />
+            type="com.example.messagetomail.model.LogViewModel" />
     </data>
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/main"

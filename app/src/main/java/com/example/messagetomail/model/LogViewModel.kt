@@ -1,4 +1,4 @@
-package com.example.v11.model
+package com.example.messagetomail.model
 
 import androidx.databinding.ObservableField
 import androidx.lifecycle.ViewModel;
