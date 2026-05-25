@@ -53,7 +53,7 @@ class EmailService : Service() {
             // 在协程中发送邮件
             serviceScope.launch {
                 try {
-                    sendEmail(devicePhone, sender, messageBody)
+                    sendEmail(this@EmailService, devicePhone, sender, messageBody)
                     Log.d("EmailService", "邮件发送完成")
                     
                     // 显示成功通知

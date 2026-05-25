@@ -71,6 +71,8 @@ dependencies {
     implementation("com.sun.mail:android-activation:1.6.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.6.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("com.google.code.gson:gson:2.10.1")
     
     // vivo系统兼容性依赖
     implementation("androidx.multidex:multidex:2.0.1")

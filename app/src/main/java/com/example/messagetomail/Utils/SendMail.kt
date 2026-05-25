@@ -1,6 +1,8 @@
 package com.example.messagetomail.Utils
 
+import android.content.Context
 import android.util.Log
+import com.example.messagetomail.repository.EmailConfigRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -14,48 +16,49 @@ import javax.mail.Transport
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeMessage
 
-fun sendEmail(devicePhoneNumber:String?, sender: String?, messageBody: String) {
-//    var
-    // QQ 邮箱配置
-    val host = "smtp.qq.com" // QQ 邮箱的 SMTP 服务器
-    val port = "465" // SSL 端口
-    val fromEmail = "q1419046431@qq.com" // 发件人邮箱
-    val password = "nzghzvtcrloodgeb" // 邮箱授权码
-    val toEmail = "1419046431@qq.com" // 收件人邮箱
+fun sendEmail(context: Context, devicePhoneNumber: String?, sender: String?, messageBody: String) {
+    val repository = EmailConfigRepository(context)
 
-    // 设置邮件属性
-    val props = Properties().apply {
-        put("mail.smtp.host", host)
-        put("mail.smtp.port", port)
-        put("mail.smtp.auth", "true")
-        put("mail.smtp.ssl.enable", "true") // 启用 SSL
+    // 读取配置（DataStore 是 Flow，需要阻塞读取最新值）
+    var senderConfig = repository.getSenderConfigBlocking()
+    var receiverConfig = repository.getReceiverConfigBlocking()
+
+    if (senderConfig == null || receiverConfig == null || receiverConfig.emails.isEmpty()) {
+        Log.e("SmsService", "邮件配置不完整，无法发送")
+        return
     }
 
-    // 创建会话
+    val props = Properties().apply {
+        put("mail.smtp.host", senderConfig.smtpHost)
+        put("mail.smtp.port", senderConfig.smtpPort)
+        put("mail.smtp.auth", "true")
+        if (senderConfig.useSsl) {
+            put("mail.smtp.ssl.enable", "true")
+        } else {
+            put("mail.smtp.starttls.enable", "true")
+        }
+    }
+
     val session = Session.getInstance(props, object : Authenticator() {
         override fun getPasswordAuthentication(): PasswordAuthentication {
-            return PasswordAuthentication(fromEmail, password)
+            return PasswordAuthentication(senderConfig.account, senderConfig.credential)
         }
     })
 
     try {
-        // 创建邮件
         val message = MimeMessage(session).apply {
-            setFrom(InternetAddress(fromEmail))
-            // 处理多个收件人地址
-            toEmail.split(",").forEach { email ->
+            setFrom(InternetAddress(senderConfig.account))
+            receiverConfig.emails.forEach { email ->
                 addRecipient(Message.RecipientType.TO, InternetAddress(email.trim()))
             }
-            subject = "收信号码:$devicePhoneNumber;来信号码：$sender" // 邮件主题
-            setText(messageBody) // 邮件内容
+            subject = "收信号码:$devicePhoneNumber;来信号码：$sender"
+            setText(messageBody)
         }
 
-        // 发送邮件
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 Transport.send(message)
-            }
-            catch (e: MessagingException){
+            } catch (e: MessagingException) {
                 e.printStackTrace()
             }
         }
@@ -63,6 +66,5 @@ fun sendEmail(devicePhoneNumber:String?, sender: String?, messageBody: String) {
         Log.d("SmsService", "Email sent successfully!")
     } catch (e: MessagingException) {
         Log.e("SmsService", "Failed to send email", e)
-
     }
 }

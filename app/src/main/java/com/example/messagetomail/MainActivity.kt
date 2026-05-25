@@ -4,16 +4,21 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import com.example.messagetomail.databinding.ActivityMainBinding
+import com.example.messagetomail.model.LogViewModel
+import com.example.messagetomail.repository.EmailConfigRepository
 import android.Manifest
 import android.content.IntentFilter
 import android.util.Log
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
-import com.example.messagetomail.databinding.ActivityMainBinding
-import com.example.messagetomail.model.LogViewModel
 import com.example.messagetomail.Utils.NotificationHelper
 import android.content.Intent
 import android.net.Uri
@@ -26,6 +31,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: LogViewModel
     private val SMS_PERMISSION_REQUEST_CODE = 123
 
+    private lateinit var repository: EmailConfigRepository
+    private var configValid = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val binding: ActivityMainBinding =
@@ -33,26 +41,51 @@ class MainActivity : AppCompatActivity() {
         viewModel = LogViewModel()
         binding.logText = viewModel
         binding.lifecycleOwner = this
-        
+
+        repository = EmailConfigRepository(this)
+
         // 初始化通知渠道（Android 8.0+需要）
         NotificationHelper.createNotificationChannel(this)
-        
+
         // 检查是否为vivo系统并提示设置
         checkVivoSystemSettings()
-        
+
         // 请求权限
         requestSmsPermissions()
+
         val toggleButton: Button = findViewById(R.id.button)
+        val btnSettings: Button = findViewById(R.id.btnSettings)
+
+        // 观察配置有效性
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                repository.configValidFlow.collect { valid ->
+                    configValid = valid
+                    if (!valid && !isServiceRunning) {
+                        viewModel.setContent("请完成邮件配置")
+                    }
+                }
+            }
+        }
+
         toggleButton.setOnClickListener {
             if (!isServiceRunning) {
+                // 开启服务前检查配置
+                if (!configValid) {
+                    Toast.makeText(this, "请先完成邮件配置", Toast.LENGTH_SHORT).show()
+                    startActivity(SettingsActivity.createIntent(this, false))
+                    return@setOnClickListener
+                }
+
                 Log.i("SmsService", "服务启动....")
-                val result = checkSmsPermission2()//检查短信权限
+                val result = checkSmsPermission2()
                 if (result) {
                     isServiceRunning = !isServiceRunning
-                    registerSmsReceiver()//注册一个接收器
+                    registerSmsReceiver()
                     Toast.makeText(this, "服务已开启", Toast.LENGTH_SHORT).show()
                     toggleButton.text = "关闭服务"
-                    binding.logText?.setContent("服务启用")
+                    viewModel.setContent("服务启用")
+                    btnSettings.isEnabled = false
                 } else {
                     Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
                     Log.e("SmsService", "启动失败！")
@@ -61,9 +94,14 @@ class MainActivity : AppCompatActivity() {
                 isServiceRunning = !isServiceRunning
                 toggleButton.text = "开启服务"
                 Toast.makeText(this, "服务已关闭", Toast.LENGTH_SHORT).show()
-                binding.logText?.setContent("服务停用")
+                viewModel.setContent("服务停用")
+                btnSettings.isEnabled = true
                 Log.i("SmsService", "服务已停用")
             }
+        }
+
+        btnSettings.setOnClickListener {
+            startActivity(SettingsActivity.createIntent(this, isServiceRunning))
         }
     }
 
@@ -78,7 +116,7 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.RECEIVE_WAP_PUSH,
             Manifest.permission.READ_PHONE_STATE
         )
-        
+
         // Android 13+ 需要通知权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -107,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.INTERNET,
             Manifest.permission.READ_PHONE_STATE
         )
-        
+
         // Android 13+ 需要通知权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -154,20 +192,20 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(smsReceiver, intentFilter)
         Log.d("SmsService", "注册接受器")
     }
-    
+
     /**
      * 检查vivo系统并提示用户进行必要设置
      */
     private fun checkVivoSystemSettings() {
         val manufacturer = Build.MANUFACTURER.lowercase()
         val brand = Build.BRAND.lowercase()
-        
+
         if (manufacturer.contains("vivo") || brand.contains("vivo")) {
             Log.d("VivoSystem", "检测到vivo系统")
             showVivoSettingsDialog()
         }
     }
-    
+
     /**
      * 显示vivo系统设置引导对话框
      */

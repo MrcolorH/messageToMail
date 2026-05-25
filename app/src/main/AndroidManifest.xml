@@ -48,6 +48,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="邮件配置" />
+
         <!-- 短信接收器 -->
         <receiver
             android:name=".SmsReceiver"
