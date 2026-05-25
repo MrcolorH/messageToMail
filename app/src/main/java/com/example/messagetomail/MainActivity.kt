@@ -31,6 +31,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var repository: EmailConfigRepository
     private var configValid = false
+    private var emailEnabled = true
+    private var wecomEnabled = false
+    private var feishuEnabled = false
+    private var feishuAppEnabled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,15 +60,38 @@ class MainActivity : AppCompatActivity() {
         val toggleButton: Button = findViewById(R.id.button)
         val btnSettings: Button = findViewById(R.id.btnSettings)
         val btnLogs: Button = findViewById(R.id.btnLogs)
+        val btnHelp: Button = findViewById(R.id.btnHelp)
 
-        // 观察配置有效性
+        // 观察配置有效性和各服务开关状态
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                repository.configValidFlow.collect { valid ->
-                    configValid = valid
-                    AppLogger.i("MainActivity", "配置有效性状态: valid=$valid, isServiceRunning=$isServiceRunning")
-                    if (!valid && !isServiceRunning) {
-                        viewModel.setContent("请完成邮件配置")
+                launch {
+                    repository.configValidFlow.collect { valid ->
+                        configValid = valid
+                        AppLogger.i("MainActivity", "配置有效性状态: valid=$valid, isServiceRunning=$isServiceRunning")
+                        if (!valid && !isServiceRunning) {
+                            viewModel.setContent("请完成服务配置")
+                        }
+                    }
+                }
+                launch {
+                    repository.emailEnabledFlow.collect { enabled ->
+                        emailEnabled = enabled
+                    }
+                }
+                launch {
+                    repository.wecomEnabledFlow.collect { enabled ->
+                        wecomEnabled = enabled
+                    }
+                }
+                launch {
+                    repository.feishuEnabledFlow.collect { enabled ->
+                        feishuEnabled = enabled
+                    }
+                }
+                launch {
+                    repository.feishuAppEnabledFlow.collect { enabled ->
+                        feishuAppEnabled = enabled
                     }
                 }
             }
@@ -76,7 +103,7 @@ class MainActivity : AppCompatActivity() {
                 // 开启服务前检查配置
                 if (!configValid) {
                     AppLogger.w("MainActivity", "配置未验证，阻止开启服务")
-                    Toast.makeText(this, "请先完成邮件配置", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "请先完成服务配置", Toast.LENGTH_SHORT).show()
                     startActivity(SettingsActivity.createIntent(this, false))
                     return@setOnClickListener
                 }
@@ -92,7 +119,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     Toast.makeText(this, "服务已开启", Toast.LENGTH_SHORT).show()
                     toggleButton.text = "关闭服务"
-                    viewModel.setContent("服务启用")
+                    viewModel.setContent(buildActiveChannelsText())
                     btnSettings.isEnabled = false
                     AppLogger.i("MainActivity", "服务已开启，短信监听服务已启动")
                 } else {
@@ -112,7 +139,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSettings.setOnClickListener {
-            AppLogger.i("MainActivity", "跳转到邮件配置页面")
+            AppLogger.i("MainActivity", "跳转到服务配置页面")
             startActivity(SettingsActivity.createIntent(this, isServiceRunning))
         }
 
@@ -120,9 +147,27 @@ class MainActivity : AppCompatActivity() {
             AppLogger.i("MainActivity", "跳转到日志页面")
             startActivity(LogActivity.createIntent(this))
         }
+
+        btnHelp.setOnClickListener {
+            AppLogger.i("MainActivity", "跳转到使用说明页面")
+            startActivity(HelpActivity.createIntent(this))
+        }
     }
 
 
+
+    private fun buildActiveChannelsText(): String {
+        val channels = mutableListOf<String>()
+        if (emailEnabled) channels.add("邮件")
+        if (wecomEnabled) channels.add("企微机器人")
+        if (feishuEnabled) channels.add("飞书机器人")
+        if (feishuAppEnabled) channels.add("飞书应用机器人")
+        return if (channels.isEmpty()) {
+            "服务已启用（未配置转发渠道）"
+        } else {
+            "已启用转发：${channels.joinToString("、")}"
+        }
+    }
 
     private fun requestSmsPermissions() {
         AppLogger.i("Permission", "开始请求短信相关权限")

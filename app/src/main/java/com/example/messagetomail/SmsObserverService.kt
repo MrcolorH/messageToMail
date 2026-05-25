@@ -10,6 +10,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.provider.Telephony
 import com.example.messagetomail.Utils.AppLogger
+import com.example.messagetomail.Utils.FeishuAppRobotSender
+import com.example.messagetomail.Utils.FeishuRobotSender
 import com.example.messagetomail.Utils.NotificationHelper
 import com.example.messagetomail.Utils.WecomRobotSender
 import com.example.messagetomail.repository.EmailConfigRepository
@@ -143,8 +145,12 @@ class SmsObserverService : Service() {
                     val emailEnabled = repository.isEmailEnabledBlocking()
                     val wecomEnabled = repository.isWecomEnabledBlocking()
                     val wecomConfig = repository.getWecomConfigBlocking()
+                    val feishuEnabled = repository.isFeishuEnabledBlocking()
+                    val feishuConfig = repository.getFeishuConfigBlocking()
+                    val feishuAppEnabled = repository.isFeishuAppEnabledBlocking()
+                    val feishuAppConfig = repository.getFeishuAppConfigBlocking()
 
-                    AppLogger.i("SmsObserver", "渠道配置: emailEnabled=$emailEnabled, wecomEnabled=$wecomEnabled")
+                    AppLogger.i("SmsObserver", "渠道配置: emailEnabled=$emailEnabled, wecomEnabled=$wecomEnabled, feishuEnabled=$feishuEnabled, feishuAppEnabled=$feishuAppEnabled")
 
                     if (emailEnabled) {
                         val emailIntent = Intent(this@SmsObserverService, EmailService::class.java).apply {
@@ -163,7 +169,7 @@ class SmsObserverService : Service() {
                     if (wecomEnabled && wecomConfig != null) {
                         serviceScope.launch {
                             val result = WecomRobotSender.send(
-                                wecomConfig.webhookKey,
+                                wecomConfig.webhookUrl,
                                 "来自: $address",
                                 body
                             )
@@ -171,6 +177,39 @@ class SmsObserverService : Service() {
                                 AppLogger.i("SmsObserver", "企微机器人发送成功")
                             }.onFailure {
                                 AppLogger.e("SmsObserver", "企微机器人发送失败: ${it.message}")
+                            }
+                        }
+                    }
+
+                    if (feishuEnabled && feishuConfig != null) {
+                        serviceScope.launch {
+                            val result = FeishuRobotSender.send(
+                                feishuConfig.webhookUrl,
+                                feishuConfig.secret,
+                                "来自: $address",
+                                body
+                            )
+                            result.onSuccess {
+                                AppLogger.i("SmsObserver", "飞书机器人发送成功")
+                            }.onFailure {
+                                AppLogger.e("SmsObserver", "飞书机器人发送失败: ${it.message}")
+                            }
+                        }
+                    }
+
+                    if (feishuAppEnabled && feishuAppConfig != null) {
+                        serviceScope.launch {
+                            val result = FeishuAppRobotSender.sendToMultiple(
+                                feishuAppConfig.appId,
+                                feishuAppConfig.appSecret,
+                                feishuAppConfig.receivers,
+                                "来自: $address",
+                                body
+                            )
+                            result.onSuccess {
+                                AppLogger.i("SmsObserver", "飞书应用机器人发送成功")
+                            }.onFailure {
+                                AppLogger.e("SmsObserver", "飞书应用机器人发送失败: ${it.message}")
                             }
                         }
                     }

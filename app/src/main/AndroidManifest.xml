@@ -51,12 +51,22 @@
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
-            android:label="邮件配置" />
+            android:label="服务配置" />
 
         <activity
             android:name=".LogActivity"
             android:exported="false"
             android:label="运行日志" />
+
+        <activity
+            android:name=".HelpActivity"
+            android:exported="false"
+            android:label="使用说明" />
+
+        <activity
+            android:name=".FeishuIdPickerActivity"
+            android:exported="false"
+            android:label="选择群聊" />
 
         <!-- 短信接收器 -->
         <receiver

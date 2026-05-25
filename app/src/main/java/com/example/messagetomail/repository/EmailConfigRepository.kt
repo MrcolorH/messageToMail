@@ -13,11 +13,15 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.messagetomail.model.EmailType
 import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
+import com.example.messagetomail.model.FeishuAppRobotConfig
+import com.example.messagetomail.model.FeishuRobotConfig
 import com.example.messagetomail.model.WecomRobotConfig
 import com.google.gson.Gson
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.mail.Authenticator
 import javax.mail.PasswordAuthentication
@@ -37,8 +41,12 @@ class EmailConfigRepository(private val context: Context) {
         val RECEIVER_CONFIG_KEY = stringPreferencesKey("receiver_config")
         val CONFIG_VALID_KEY = booleanPreferencesKey("config_valid")
         val WECOM_CONFIG_KEY = stringPreferencesKey("wecom_config")
+        val FEISHU_CONFIG_KEY = stringPreferencesKey("feishu_config")
+        val FEISHU_APP_CONFIG_KEY = stringPreferencesKey("feishu_app_config")
         val EMAIL_ENABLED_KEY = booleanPreferencesKey("email_enabled")
         val WECOM_ENABLED_KEY = booleanPreferencesKey("wecom_enabled")
+        val FEISHU_ENABLED_KEY = booleanPreferencesKey("feishu_enabled")
+        val FEISHU_APP_ENABLED_KEY = booleanPreferencesKey("feishu_app_enabled")
     }
 
     // === 读取 ===
@@ -55,7 +63,9 @@ class EmailConfigRepository(private val context: Context) {
     }
 
     val wecomConfigFlow: Flow<WecomRobotConfig?> = dataStore.data.map { prefs ->
-        prefs[WECOM_CONFIG_KEY]?.let { gson.fromJson(it, WecomRobotConfig::class.java) }
+        prefs[WECOM_CONFIG_KEY]?.let { jsonStr ->
+            parseWecomConfigWithMigration(jsonStr)
+        }
     }
 
     val emailEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -64,6 +74,22 @@ class EmailConfigRepository(private val context: Context) {
 
     val wecomEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[WECOM_ENABLED_KEY] ?: false
+    }
+
+    val feishuConfigFlow: Flow<FeishuRobotConfig?> = dataStore.data.map { prefs ->
+        prefs[FEISHU_CONFIG_KEY]?.let { gson.fromJson(it, FeishuRobotConfig::class.java) }
+    }
+
+    val feishuEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[FEISHU_ENABLED_KEY] ?: false
+    }
+
+    val feishuAppConfigFlow: Flow<FeishuAppRobotConfig?> = dataStore.data.map { prefs ->
+        prefs[FEISHU_APP_CONFIG_KEY]?.let { gson.fromJson(it, FeishuAppRobotConfig::class.java) }
+    }
+
+    val feishuAppEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[FEISHU_APP_ENABLED_KEY] ?: false
     }
 
     // === 写入 ===
@@ -103,6 +129,30 @@ class EmailConfigRepository(private val context: Context) {
         }
     }
 
+    suspend fun saveFeishuConfig(config: FeishuRobotConfig) {
+        dataStore.edit { prefs ->
+            prefs[FEISHU_CONFIG_KEY] = gson.toJson(config)
+        }
+    }
+
+    suspend fun setFeishuEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[FEISHU_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFeishuAppConfig(config: FeishuAppRobotConfig) {
+        dataStore.edit { prefs ->
+            prefs[FEISHU_APP_CONFIG_KEY] = gson.toJson(config)
+        }
+    }
+
+    suspend fun setFeishuAppEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[FEISHU_APP_ENABLED_KEY] = enabled
+        }
+    }
+
     // === 阻塞读取（供同步调用使用） ===
     fun getSenderConfigBlocking(): SenderConfig? = runBlocking {
         senderConfigFlow.first()
@@ -120,12 +170,63 @@ class EmailConfigRepository(private val context: Context) {
         wecomConfigFlow.first()
     }
 
+    /**
+     * 兼容旧版企微配置：旧版只存了 webhookKey，新版存完整的 webhookUrl。
+     * 如果读取到旧格式，自动拼接成完整 URL 并保存回去。
+     */
+    private fun parseWecomConfigWithMigration(jsonStr: String): WecomRobotConfig? {
+        return try {
+            val map = gson.fromJson(jsonStr, Map::class.java)
+            val webhookUrl = map["webhookUrl"] as? String
+            val enabled = (map["enabled"] as? Boolean) ?: false
+
+            if (!webhookUrl.isNullOrBlank()) {
+                // 新版格式，直接返回
+                WecomRobotConfig(webhookUrl, enabled)
+            } else {
+                // 尝试读取旧格式 webhookKey
+                val webhookKey = map["webhookKey"] as? String
+                if (!webhookKey.isNullOrBlank()) {
+                    val migratedUrl = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=$webhookKey"
+                    val migratedConfig = WecomRobotConfig(migratedUrl, enabled)
+                    // 异步保存新格式（fire-and-forget，失败不影响本次读取）
+                    kotlinx.coroutines.GlobalScope.launch {
+                        try {
+                            saveWecomConfig(migratedConfig)
+                        } catch (_: Exception) { }
+                    }
+                    migratedConfig
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun isEmailEnabledBlocking(): Boolean = runBlocking {
         emailEnabledFlow.first()
     }
 
     fun isWecomEnabledBlocking(): Boolean = runBlocking {
         wecomEnabledFlow.first()
+    }
+
+    fun getFeishuConfigBlocking(): FeishuRobotConfig? = runBlocking {
+        feishuConfigFlow.first()
+    }
+
+    fun isFeishuEnabledBlocking(): Boolean = runBlocking {
+        feishuEnabledFlow.first()
+    }
+
+    fun getFeishuAppConfigBlocking(): FeishuAppRobotConfig? = runBlocking {
+        feishuAppConfigFlow.first()
+    }
+
+    fun isFeishuAppEnabledBlocking(): Boolean = runBlocking {
+        feishuAppEnabledFlow.first()
     }
 
     // === 清空 ===
@@ -214,6 +315,93 @@ class EmailConfigRepository(private val context: Context) {
             }
             setConfigValid(sender != null && receivers != null && receivers.emails.isNotEmpty())
             Result.success(Pair(sender, receivers))
+        } catch (e: Exception) {
+            Result.failure(Exception("导入失败：${e.message}"))
+        }
+    }
+
+    // === 企业微信导入导出 ===
+    fun exportWecomToClipboard(config: WecomRobotConfig?) {
+        config ?: run {
+            Toast.makeText(context, "无可导出的企微配置", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val json = gson.toJson(config)
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("wecom_config", json))
+        Toast.makeText(context, "企微配置已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+
+    suspend fun importWecomFromClipboard(): Result<WecomRobotConfig> {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        if (clip == null || clip.itemCount == 0) {
+            return Result.failure(Exception("剪贴板为空"))
+        }
+        val text = clip.getItemAt(0).text?.toString()
+            ?: return Result.failure(Exception("剪贴板内容无效"))
+        return try {
+            val config = gson.fromJson(text, WecomRobotConfig::class.java)
+            saveWecomConfig(config)
+            Result.success(config)
+        } catch (e: Exception) {
+            Result.failure(Exception("导入失败：${e.message}"))
+        }
+    }
+
+    // === 飞书机器人导入导出 ===
+    fun exportFeishuToClipboard(config: FeishuRobotConfig?) {
+        config ?: run {
+            Toast.makeText(context, "无可导出的飞书配置", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val json = gson.toJson(config)
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("feishu_config", json))
+        Toast.makeText(context, "飞书配置已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+
+    suspend fun importFeishuFromClipboard(): Result<FeishuRobotConfig> {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        if (clip == null || clip.itemCount == 0) {
+            return Result.failure(Exception("剪贴板为空"))
+        }
+        val text = clip.getItemAt(0).text?.toString()
+            ?: return Result.failure(Exception("剪贴板内容无效"))
+        return try {
+            val config = gson.fromJson(text, FeishuRobotConfig::class.java)
+            saveFeishuConfig(config)
+            Result.success(config)
+        } catch (e: Exception) {
+            Result.failure(Exception("导入失败：${e.message}"))
+        }
+    }
+
+    // === 飞书应用机器人导入导出 ===
+    fun exportFeishuAppToClipboard(config: FeishuAppRobotConfig?) {
+        config ?: run {
+            Toast.makeText(context, "无可导出的飞书应用配置", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val json = gson.toJson(config)
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("feishu_app_config", json))
+        Toast.makeText(context, "飞书应用配置已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+
+    suspend fun importFeishuAppFromClipboard(): Result<FeishuAppRobotConfig> {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        if (clip == null || clip.itemCount == 0) {
+            return Result.failure(Exception("剪贴板为空"))
+        }
+        val text = clip.getItemAt(0).text?.toString()
+            ?: return Result.failure(Exception("剪贴板内容无效"))
+        return try {
+            val config = gson.fromJson(text, FeishuAppRobotConfig::class.java)
+            saveFeishuAppConfig(config)
+            Result.success(config)
         } catch (e: Exception) {
             Result.failure(Exception("导入失败：${e.message}"))
         }

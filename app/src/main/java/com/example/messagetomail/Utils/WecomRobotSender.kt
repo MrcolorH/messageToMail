@@ -8,13 +8,10 @@ import java.net.URL
 
 object WecomRobotSender {
 
-    private const val WEBHOOK_URL_TEMPLATE =
-        "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=%s"
-
-    suspend fun send(webhookKey: String, title: String, content: String): Result<Unit> {
+    suspend fun send(webhookUrl: String, title: String, content: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = URL(WEBHOOK_URL_TEMPLATE.format(webhookKey))
+                val url = URL(webhookUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
