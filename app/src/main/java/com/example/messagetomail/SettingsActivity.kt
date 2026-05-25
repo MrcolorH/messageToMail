@@ -20,6 +20,7 @@ import com.example.messagetomail.model.EmailType
 import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
 import com.example.messagetomail.repository.EmailConfigRepository
+import com.example.messagetomail.Utils.AppLogger
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -70,6 +71,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
         supportActionBar?.title = "邮件配置"
+        AppLogger.i("Settings", "进入邮件配置页面, serviceRunning=$serviceRunning")
 
         repository = EmailConfigRepository(this)
         serviceRunning = intent.getBooleanExtra(EXTRA_SERVICE_RUNNING, false)
@@ -183,6 +185,7 @@ class SettingsActivity : AppCompatActivity() {
 
         btnSaveSender.setOnClickListener {
             if (serviceRunning) {
+                AppLogger.w("Settings", "用户尝试保存发件人配置，但服务运行中")
                 Toast.makeText(this, "服务运行中，无法修改配置", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -190,21 +193,26 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnExportSender.setOnClickListener {
+            AppLogger.i("Settings", "用户导出发件人配置到剪贴板")
             repository.exportToClipboard(currentSender, currentReceivers)
         }
 
         btnImportSender.setOnClickListener {
             if (serviceRunning) {
+                AppLogger.w("Settings", "用户尝试导入配置，但服务运行中")
                 Toast.makeText(this, "服务运行中，无法导入配置", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            AppLogger.i("Settings", "用户从剪贴板导入配置")
             lifecycleScope.launch {
                 val result = repository.importFromClipboard()
                 result.onSuccess {
+                    AppLogger.i("Settings", "配置导入成功")
                     Toast.makeText(this@SettingsActivity, "配置导入成功", Toast.LENGTH_SHORT).show()
                     refreshSenderUI(it.first)
                     refreshReceiverUI(it.second)
                 }.onFailure {
+                    AppLogger.e("Settings", "配置导入失败: ${it.message}")
                     Toast.makeText(this@SettingsActivity, it.message, Toast.LENGTH_LONG).show()
                 }
             }
@@ -214,6 +222,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun setupReceiverPanel() {
         btnAddReceiver.setOnClickListener {
             if (serviceRunning) {
+                AppLogger.w("Settings", "用户尝试添加收件人，但服务运行中")
                 Toast.makeText(this, "服务运行中，无法修改配置", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -237,6 +246,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             currentList.add(email)
             currentReceivers = ReceiverConfig(currentList)
+            AppLogger.i("Settings", "添加收件人: $email, 当前共 ${currentList.size} 个")
             lifecycleScope.launch {
                 repository.saveReceiverConfig(ReceiverConfig(currentList))
                 refreshReceiverUI(ReceiverConfig(currentList))
@@ -245,21 +255,26 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         btnExportReceiver.setOnClickListener {
+            AppLogger.i("Settings", "用户导出收件人配置到剪贴板")
             repository.exportToClipboard(currentSender, currentReceivers)
         }
 
         btnImportReceiver.setOnClickListener {
             if (serviceRunning) {
+                AppLogger.w("Settings", "用户尝试导入收件人配置，但服务运行中")
                 Toast.makeText(this, "服务运行中，无法导入配置", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            AppLogger.i("Settings", "用户从剪贴板导入收件人配置")
             lifecycleScope.launch {
                 val result = repository.importFromClipboard()
                 result.onSuccess {
+                    AppLogger.i("Settings", "收件人配置导入成功")
                     Toast.makeText(this@SettingsActivity, "配置导入成功", Toast.LENGTH_SHORT).show()
                     refreshSenderUI(it.first)
                     refreshReceiverUI(it.second)
                 }.onFailure {
+                    AppLogger.e("Settings", "收件人配置导入失败: ${it.message}")
                     Toast.makeText(this@SettingsActivity, it.message, Toast.LENGTH_LONG).show()
                 }
             }
@@ -283,6 +298,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 launch {
                     repository.configValidFlow.collect { valid ->
+                        AppLogger.d("Settings", "配置有效性变化: valid=$valid, sender=${currentSender != null}, receivers=${currentReceivers?.emails?.size ?: 0}")
                         val status = when {
                             serviceRunning -> "⚠️ 服务运行中"
                             valid -> "✅ 配置已验证通过"
@@ -322,11 +338,13 @@ class SettingsActivity : AppCompatActivity() {
             tvEmail.text = email
             btnDelete.setOnClickListener {
                 if (serviceRunning) {
+                    AppLogger.w("Settings", "用户尝试删除收件人，但服务运行中")
                     Toast.makeText(this, "服务运行中，无法删除", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
                 val newList = list.toMutableList().apply { remove(email) }
                 currentReceivers = ReceiverConfig(newList)
+                AppLogger.i("Settings", "删除收件人: $email, 剩余 ${newList.size} 个")
                 lifecycleScope.launch {
                     repository.saveReceiverConfig(ReceiverConfig(newList))
                     refreshReceiverUI(ReceiverConfig(newList))
@@ -347,10 +365,12 @@ class SettingsActivity : AppCompatActivity() {
         val smtpPort = etSmtpPort.text.toString().trim()
 
         if (account.isEmpty() || credential.isEmpty() || smtpHost.isEmpty() || smtpPort.isEmpty()) {
+            AppLogger.w("Settings", "保存发件人配置失败：信息不完整")
             Toast.makeText(this, "请填写完整信息", Toast.LENGTH_SHORT).show()
             return
         }
 
+        AppLogger.i("Settings", "准备保存发件人配置: type=$type, account=$account, smtp=$smtpHost:$smtpPort")
         val config = SenderConfig(
             emailType = type,
             account = account,
@@ -364,16 +384,19 @@ class SettingsActivity : AppCompatActivity() {
         btnSaveSender.isEnabled = false
 
         lifecycleScope.launch {
+            AppLogger.i("Settings", "开始验证 SMTP 连通性...")
             val result = repository.verifySender(config)
             btnSaveSender.isEnabled = true
             result.onSuccess {
                 repository.saveSenderConfig(config)
                 repository.setConfigValid(true)
                 currentSender = config
+                AppLogger.i("Settings", "SMTP 验证通过，发件人配置已保存")
                 Toast.makeText(this@SettingsActivity, "验证通过，配置已保存", Toast.LENGTH_SHORT).show()
                 tvSenderStatus.text = "✅ 配置已验证通过"
             }.onFailure {
                 repository.setConfigValid(false)
+                AppLogger.e("Settings", "SMTP 验证失败: ${it.message}")
                 Toast.makeText(this@SettingsActivity, "验证失败：${it.message}", Toast.LENGTH_LONG).show()
                 tvSenderStatus.text = "❌ 验证失败：${it.message}"
             }

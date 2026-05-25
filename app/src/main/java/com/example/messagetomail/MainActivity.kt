@@ -14,9 +14,9 @@ import kotlinx.coroutines.launch
 import com.example.messagetomail.databinding.ActivityMainBinding
 import com.example.messagetomail.model.LogViewModel
 import com.example.messagetomail.repository.EmailConfigRepository
+import com.example.messagetomail.Utils.AppLogger
 import android.Manifest
 import android.content.IntentFilter
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import com.example.messagetomail.Utils.NotificationHelper
@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLogger.i("MainActivity", "主界面创建")
         val binding: ActivityMainBinding =
             DataBindingUtil.setContentView(this, R.layout.activity_main)
         viewModel = LogViewModel()
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
 
         // 初始化通知渠道（Android 8.0+需要）
         NotificationHelper.createNotificationChannel(this)
+        AppLogger.d("MainActivity", "通知渠道初始化完成")
 
         // 检查是否为vivo系统并提示设置
         checkVivoSystemSettings()
@@ -55,12 +57,14 @@ class MainActivity : AppCompatActivity() {
 
         val toggleButton: Button = findViewById(R.id.button)
         val btnSettings: Button = findViewById(R.id.btnSettings)
+        val btnLogs: Button = findViewById(R.id.btnLogs)
 
         // 观察配置有效性
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 repository.configValidFlow.collect { valid ->
                     configValid = valid
+                    AppLogger.i("MainActivity", "配置有效性状态: valid=$valid, isServiceRunning=$isServiceRunning")
                     if (!valid && !isServiceRunning) {
                         viewModel.setContent("请完成邮件配置")
                     }
@@ -70,15 +74,17 @@ class MainActivity : AppCompatActivity() {
 
         toggleButton.setOnClickListener {
             if (!isServiceRunning) {
+                AppLogger.i("MainActivity", "用户点击开启服务")
                 // 开启服务前检查配置
                 if (!configValid) {
+                    AppLogger.w("MainActivity", "配置未验证，阻止开启服务")
                     Toast.makeText(this, "请先完成邮件配置", Toast.LENGTH_SHORT).show()
                     startActivity(SettingsActivity.createIntent(this, false))
                     return@setOnClickListener
                 }
 
-                Log.i("SmsService", "服务启动....")
                 val result = checkSmsPermission2()
+                AppLogger.i("MainActivity", "权限检查结果: result=$result")
                 if (result) {
                     isServiceRunning = !isServiceRunning
                     registerSmsReceiver()
@@ -86,29 +92,37 @@ class MainActivity : AppCompatActivity() {
                     toggleButton.text = "关闭服务"
                     viewModel.setContent("服务启用")
                     btnSettings.isEnabled = false
+                    AppLogger.i("MainActivity", "服务已开启，短信接收器已注册")
                 } else {
                     Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
-                    Log.e("SmsService", "启动失败！")
+                    AppLogger.e("MainActivity", "启动失败：权限不足")
                 }
             } else {
+                AppLogger.i("MainActivity", "用户点击关闭服务")
                 isServiceRunning = !isServiceRunning
                 toggleButton.text = "开启服务"
                 Toast.makeText(this, "服务已关闭", Toast.LENGTH_SHORT).show()
                 viewModel.setContent("服务停用")
                 btnSettings.isEnabled = true
-                Log.i("SmsService", "服务已停用")
+                AppLogger.i("MainActivity", "服务已关闭")
             }
         }
 
         btnSettings.setOnClickListener {
+            AppLogger.i("MainActivity", "跳转到邮件配置页面")
             startActivity(SettingsActivity.createIntent(this, isServiceRunning))
+        }
+
+        btnLogs.setOnClickListener {
+            AppLogger.i("MainActivity", "跳转到日志页面")
+            startActivity(LogActivity.createIntent(this))
         }
     }
 
 
 
     private fun requestSmsPermissions() {
-        Log.d("PermissionGet","进来获取权限了")
+        AppLogger.i("Permission", "开始请求短信相关权限")
         val permissions = mutableListOf(
             Manifest.permission.READ_SMS,
             Manifest.permission.RECEIVE_SMS,
@@ -120,12 +134,14 @@ class MainActivity : AppCompatActivity() {
         // Android 13+ 需要通知权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            AppLogger.d("Permission", "Android 13+，追加通知权限")
         }
 
         val permissionsNeeded = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
+        AppLogger.i("Permission", "缺少的权限数量: ${permissionsNeeded.size}")
         if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(
                 this,
@@ -137,6 +153,7 @@ class MainActivity : AppCompatActivity() {
 
     //权限校验-v2-扩展权限检查
     private fun checkSmsPermission2(): Boolean{
+        AppLogger.i("Permission", "执行扩展权限检查")
         val permissions = mutableListOf(
             Manifest.permission.READ_SMS,
             Manifest.permission.RECEIVE_SMS,
@@ -157,11 +174,12 @@ class MainActivity : AppCompatActivity() {
 
         if (permissionsNeeded.isNotEmpty()) {
             //缺少权限 -> 获取权限
+            AppLogger.w("Permission", "缺少权限: $permissionsNeeded")
             requestSmsPermissions()
             return false
         } else {
             //四个权限齐的
-            Log.d("SmsService", "已有短信权限")
+            AppLogger.i("Permission", "所有权限已获取")
             return true
         }
     }
@@ -180,7 +198,6 @@ class MainActivity : AppCompatActivity() {
             )
             return false
         } else {
-            Log.d("SmsService", "已有短信权限")
             registerSmsReceiver()
             return true
         }
@@ -190,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         val intentFilter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
         intentFilter.priority = 1000
         registerReceiver(smsReceiver, intentFilter)
-        Log.d("SmsService", "注册接受器")
+        AppLogger.i("SmsService", "短信接收器已注册，priority=1000")
     }
 
     /**
@@ -200,8 +217,9 @@ class MainActivity : AppCompatActivity() {
         val manufacturer = Build.MANUFACTURER.lowercase()
         val brand = Build.BRAND.lowercase()
 
+        AppLogger.i("VivoSystem", "设备信息: manufacturer=$manufacturer, brand=$brand, model=${Build.MODEL}")
         if (manufacturer.contains("vivo") || brand.contains("vivo")) {
-            Log.d("VivoSystem", "检测到vivo系统")
+            AppLogger.i("VivoSystem", "检测到vivo系统，显示设置引导")
             showVivoSettingsDialog()
         }
     }

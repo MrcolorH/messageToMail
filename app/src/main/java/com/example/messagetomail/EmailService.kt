@@ -4,7 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
+import com.example.messagetomail.Utils.AppLogger
 import com.example.messagetomail.Utils.NotificationHelper
 import com.example.messagetomail.Utils.sendEmail
 import kotlinx.coroutines.CoroutineScope
@@ -14,49 +14,50 @@ import kotlinx.coroutines.launch
 
 class EmailService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
-    
+
     companion object {
         private const val FOREGROUND_SERVICE_ID = 1001
         const val EXTRA_DEVICE_PHONE = "device_phone"
         const val EXTRA_SENDER = "sender"
         const val EXTRA_MESSAGE_BODY = "message_body"
     }
-    
+
     override fun onCreate() {
         super.onCreate()
-        Log.d("EmailService", "EmailService created")
-        
-        // 创建通知渠道
+        AppLogger.i("EmailService", "EmailService created")
         NotificationHelper.createNotificationChannel(this)
     }
-    
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("EmailService", "EmailService started")
-        
+        AppLogger.i("EmailService", "EmailService started, startId=$startId")
+
         // 启动前台服务
         val notification = NotificationHelper.createForegroundNotification(
             this,
             "短信转邮件服务",
             "正在发送邮件..."
         )
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForeground(FOREGROUND_SERVICE_ID, notification)
+            AppLogger.d("EmailService", "前台服务已启动 (通知ID=$FOREGROUND_SERVICE_ID)")
         }
-        
+
         // 获取传递的参数
         val devicePhone = intent?.getStringExtra(EXTRA_DEVICE_PHONE)
         val sender = intent?.getStringExtra(EXTRA_SENDER)
         val messageBody = intent?.getStringExtra(EXTRA_MESSAGE_BODY)
-        
+
+        AppLogger.i("EmailService", "收到参数: devicePhone=$devicePhone, sender=$sender, bodyLength=${messageBody?.length}")
+
         if (devicePhone != null && sender != null && messageBody != null) {
             // 在协程中发送邮件
             serviceScope.launch {
                 try {
+                    AppLogger.i("EmailService", "开始调用 sendEmail 发送邮件")
                     sendEmail(this@EmailService, devicePhone, sender, messageBody)
-                    Log.d("EmailService", "邮件发送完成")
-                    
-                    // 显示成功通知
+                    AppLogger.i("EmailService", "邮件发送完成")
+
                     NotificationHelper.showNotification(
                         this@EmailService,
                         "邮件发送成功",
@@ -64,9 +65,8 @@ class EmailService : Service() {
                         2001
                     )
                 } catch (e: Exception) {
-                    Log.e("EmailService", "邮件发送失败", e)
-                    
-                    // 显示失败通知
+                    AppLogger.e("EmailService", "邮件发送失败", e)
+
                     NotificationHelper.showNotification(
                         this@EmailService,
                         "邮件发送失败",
@@ -74,7 +74,7 @@ class EmailService : Service() {
                         2002
                     )
                 } finally {
-                    // 停止前台服务
+                    AppLogger.i("EmailService", "停止前台服务")
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                     } else {
@@ -85,7 +85,7 @@ class EmailService : Service() {
                 }
             }
         } else {
-            Log.e("EmailService", "缺少必要参数")
+            AppLogger.e("EmailService", "缺少必要参数: devicePhone=${devicePhone != null}, sender=${sender != null}, messageBody=${messageBody != null}")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } else {
@@ -94,16 +94,16 @@ class EmailService : Service() {
             }
             stopSelf()
         }
-        
+
         return START_NOT_STICKY
     }
-    
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("EmailService", "EmailService destroyed")
+        AppLogger.i("EmailService", "EmailService destroyed")
     }
 }

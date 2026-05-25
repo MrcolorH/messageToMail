@@ -53,6 +53,11 @@
             android:exported="false"
             android:label="邮件配置" />
 
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="运行日志" />
+
         <!-- 短信接收器 -->
         <receiver
             android:name=".SmsReceiver"
