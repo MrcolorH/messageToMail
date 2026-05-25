@@ -1,0 +1,213 @@
+package com.example.v11
+
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.widget.Button
+import androidx.appcompat.app.AppCompatActivity
+import androidx.databinding.DataBindingUtil
+import android.Manifest
+import android.content.IntentFilter
+import android.util.Log
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
+import com.example.v11.databinding.ActivityMainBinding
+import com.example.v11.model.LogViewModel
+import com.example.v11.Utils.NotificationHelper
+import android.content.Intent
+import android.net.Uri
+import androidx.appcompat.app.AlertDialog
+
+
+class MainActivity : AppCompatActivity() {
+    var smsReceiver= SmsReceiver()
+    private var isServiceRunning = false
+    private lateinit var viewModel: LogViewModel
+    private val SMS_PERMISSION_REQUEST_CODE = 123
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val binding: ActivityMainBinding =
+            DataBindingUtil.setContentView(this, R.layout.activity_main)
+        viewModel = LogViewModel()
+        binding.logText = viewModel
+        binding.lifecycleOwner = this
+        
+        // 初始化通知渠道（Android 8.0+需要）
+        NotificationHelper.createNotificationChannel(this)
+        
+        // 检查是否为vivo系统并提示设置
+        checkVivoSystemSettings()
+        
+        // 请求权限
+        requestSmsPermissions()
+        val toggleButton: Button = findViewById(R.id.button)
+        toggleButton.setOnClickListener {
+            if (!isServiceRunning) {
+                Log.i("SmsService", "服务启动....")
+                val result = checkSmsPermission2()//检查短信权限
+                if (result) {
+                    isServiceRunning = !isServiceRunning
+                    registerSmsReceiver()//注册一个接收器
+                    Toast.makeText(this, "服务已开启", Toast.LENGTH_SHORT).show()
+                    toggleButton.text = "关闭服务"
+                    binding.logText?.setContent("服务启用")
+                } else {
+                    Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
+                    Log.e("SmsService", "启动失败！")
+                }
+            } else {
+                isServiceRunning = !isServiceRunning
+                toggleButton.text = "开启服务"
+                Toast.makeText(this, "服务已关闭", Toast.LENGTH_SHORT).show()
+                binding.logText?.setContent("服务停用")
+                Log.i("SmsService", "服务已停用")
+            }
+        }
+    }
+
+
+
+    private fun requestSmsPermissions() {
+        Log.d("PermissionGet","进来获取权限了")
+        val permissions = mutableListOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.RECEIVE_MMS,
+            Manifest.permission.RECEIVE_WAP_PUSH,
+            Manifest.permission.READ_PHONE_STATE
+        )
+        
+        // Android 13+ 需要通知权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val permissionsNeeded = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                permissionsNeeded.toTypedArray(),
+                SMS_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    //权限校验-v2-扩展权限检查
+    private fun checkSmsPermission2(): Boolean{
+        val permissions = mutableListOf(
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.RECEIVE_MMS,
+            Manifest.permission.RECEIVE_WAP_PUSH,
+            Manifest.permission.INTERNET,
+            Manifest.permission.READ_PHONE_STATE
+        )
+        
+        // Android 13+ 需要通知权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val permissionsNeeded = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            //缺少权限 -> 获取权限
+            requestSmsPermissions()
+            return false
+        } else {
+            //四个权限齐的
+            Log.d("SmsService", "已有短信权限")
+            return true
+        }
+    }
+    // 权限校验-v1-1个权限
+    private fun checkSmsPermission1(): Boolean {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_SMS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // 无短信权限时需要获取，这个不知道为啥不弹窗
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_SMS),
+                SMS_PERMISSION_REQUEST_CODE
+            )
+            return false
+        } else {
+            Log.d("SmsService", "已有短信权限")
+            registerSmsReceiver()
+            return true
+        }
+    }
+
+    private fun registerSmsReceiver() {
+        val intentFilter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
+        intentFilter.priority = 1000
+        registerReceiver(smsReceiver, intentFilter)
+        Log.d("SmsService", "注册接受器")
+    }
+    
+    /**
+     * 检查vivo系统并提示用户进行必要设置
+     */
+    private fun checkVivoSystemSettings() {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        val brand = Build.BRAND.lowercase()
+        
+        if (manufacturer.contains("vivo") || brand.contains("vivo")) {
+            Log.d("VivoSystem", "检测到vivo系统")
+            showVivoSettingsDialog()
+        }
+    }
+    
+    /**
+     * 显示vivo系统设置引导对话框
+     */
+    private fun showVivoSettingsDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("vivo系统设置提醒")
+            .setMessage("为确保短信转邮件功能正常工作，请进行以下设置：\n\n" +
+                    "1. 开启自启动管理权限\n" +
+                    "2. 允许后台高耗电\n" +
+                    "3. 关闭省电模式限制\n" +
+                    "4. 将应用加入白名单\n\n" +
+                    "是否现在前往设置？")
+            .setPositiveButton("前往设置") { _, _ ->
+                try {
+                    // 尝试打开vivo的自启动管理页面
+                    val intent = Intent().apply {
+                        component = android.content.ComponentName(
+                            "com.vivo.permissionmanager",
+                            "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
+                        )
+                        putExtra("packagename", packageName)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    // 如果无法打开特定页面，打开应用设置页面
+                    try {
+                        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        intent.data = Uri.parse("package:$packageName")
+                        startActivity(intent)
+                    } catch (ex: Exception) {
+                        Toast.makeText(this, "请手动前往设置-应用管理中配置权限", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton("稍后设置") { dialog, _ ->
+                dialog.dismiss()
+                Toast.makeText(this, "请记得在设置中开启相关权限", Toast.LENGTH_LONG).show()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+}
