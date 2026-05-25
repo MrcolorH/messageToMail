@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "V11"
+rootProject.name = "messageToMail"
 include(":app")
  
