@@ -67,7 +67,7 @@ suspend fun sendEmail(context: Context, devicePhoneNumber: String?, sender: Stri
                     addRecipient(Message.RecipientType.TO, InternetAddress(email.trim()))
                     AppLogger.d("SendMail", "添加收件人: $email")
                 }
-                subject = "收信号码:$devicePhoneNumber;来信号码：$sender"
+                subject = "【短信转发】"
                 setText(messageBody)
             }
             AppLogger.i("SendMail", "邮件内容构建完成，准备发送...")

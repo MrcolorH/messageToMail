@@ -19,10 +19,11 @@ object WecomRobotSender {
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
 
+                val text = if (title.isNotBlank()) "【短信转发】\n$title\n$content" else "【短信转发】\n$content"
                 val json = JSONObject().apply {
                     put("msgtype", "text")
                     put("text", JSONObject().apply {
-                        put("content", "【短信转发】\n$title\n$content")
+                        put("content", text)
                     })
                 }
 

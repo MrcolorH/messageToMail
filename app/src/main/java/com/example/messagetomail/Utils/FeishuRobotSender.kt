@@ -22,10 +22,11 @@ object FeishuRobotSender {
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
 
+                val text = if (title.isNotBlank()) "【短信转发】\n$title\n$content" else "【短信转发】\n$content"
                 val json = JSONObject().apply {
                     put("msg_type", "text")
                     put("content", JSONObject().apply {
-                        put("text", "【短信转发】\n$title\n$content")
+                        put("text", text)
                     })
                     // 如果配置了 secret，添加签名校验
                     if (secret.isNotBlank()) {

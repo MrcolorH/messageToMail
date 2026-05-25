@@ -4,6 +4,7 @@
     <string name="app_subtitle">短信智能转发助手</string>
     <string name="app_desc">实时监控短信并转发到指定渠道</string>
     <string name="settings">服务配置</string>
+    <string name="filter_rule">转发规则</string>
     <string name="view_logs">查看日志</string>
     <string name="help">使用说明</string>
 </resources>

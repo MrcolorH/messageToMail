@@ -81,8 +81,9 @@ object FeishuAppRobotSender {
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
 
+            val text = if (title.isNotBlank()) "【短信转发】\n$title\n$content" else "【短信转发】\n$content"
             val contentJson = JSONObject().apply {
-                put("text", "【短信转发】\n$title\n$content")
+                put("text", text)
             }
 
             val json = JSONObject().apply {

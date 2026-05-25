@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
 
         val toggleButton: Button = findViewById(R.id.button)
         val btnSettings: Button = findViewById(R.id.btnSettings)
+        val btnFilterRule: Button = findViewById(R.id.btnFilterRule)
         val btnLogs: Button = findViewById(R.id.btnLogs)
         val btnHelp: Button = findViewById(R.id.btnHelp)
 
@@ -141,6 +142,11 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener {
             AppLogger.i("MainActivity", "跳转到服务配置页面")
             startActivity(SettingsActivity.createIntent(this, isServiceRunning))
+        }
+
+        btnFilterRule.setOnClickListener {
+            AppLogger.i("MainActivity", "跳转到转发规则页面")
+            startActivity(FilterRuleActivity.createIntent(this))
         }
 
         btnLogs.setOnClickListener {

@@ -13,6 +13,8 @@ import com.example.messagetomail.Utils.AppLogger
 import com.example.messagetomail.Utils.FeishuAppRobotSender
 import com.example.messagetomail.Utils.FeishuRobotSender
 import com.example.messagetomail.Utils.NotificationHelper
+import com.example.messagetomail.Utils.SmsContentFormatter
+import com.example.messagetomail.Utils.SmsFilter
 import com.example.messagetomail.Utils.WecomRobotSender
 import com.example.messagetomail.repository.EmailConfigRepository
 import kotlinx.coroutines.CoroutineScope
@@ -135,6 +137,17 @@ class SmsObserverService : Service() {
 
                     AppLogger.i("SmsObserver", "检测到新短信: id=$id, sender=$address, type=$type, read=$read, bodyLength=${body.length}, date=$date")
 
+                    // 读取过滤配置并判断是否转发
+                    val filterConfig = repository.getSmsFilterConfigBlocking()
+                    if (!SmsFilter.shouldForward(body, filterConfig)) {
+                        AppLogger.i("SmsObserver", "短信被过滤规则拦截，跳过转发")
+                        return
+                    }
+
+                    // 格式化消息内容
+                    val formattedBody = SmsContentFormatter.format(body, address)
+                    AppLogger.d("SmsObserver", "格式化后消息: ${formattedBody.take(200)}")
+
                     NotificationHelper.showNotification(
                         this@SmsObserverService,
                         "短信监听触发",
@@ -156,7 +169,7 @@ class SmsObserverService : Service() {
                         val emailIntent = Intent(this@SmsObserverService, EmailService::class.java).apply {
                             putExtra(EmailService.EXTRA_DEVICE_PHONE, "本机号码")
                             putExtra(EmailService.EXTRA_SENDER, address)
-                            putExtra(EmailService.EXTRA_MESSAGE_BODY, body)
+                            putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             startForegroundService(emailIntent)
@@ -170,8 +183,8 @@ class SmsObserverService : Service() {
                         serviceScope.launch {
                             val result = WecomRobotSender.send(
                                 wecomConfig.webhookUrl,
-                                "来自: $address",
-                                body
+                                "",
+                                formattedBody
                             )
                             result.onSuccess {
                                 AppLogger.i("SmsObserver", "企微机器人发送成功")
@@ -186,8 +199,8 @@ class SmsObserverService : Service() {
                             val result = FeishuRobotSender.send(
                                 feishuConfig.webhookUrl,
                                 feishuConfig.secret,
-                                "来自: $address",
-                                body
+                                "",
+                                formattedBody
                             )
                             result.onSuccess {
                                 AppLogger.i("SmsObserver", "飞书机器人发送成功")
@@ -203,8 +216,8 @@ class SmsObserverService : Service() {
                                 feishuAppConfig.appId,
                                 feishuAppConfig.appSecret,
                                 feishuAppConfig.receivers,
-                                "来自: $address",
-                                body
+                                "",
+                                formattedBody
                             )
                             result.onSuccess {
                                 AppLogger.i("SmsObserver", "飞书应用机器人发送成功")

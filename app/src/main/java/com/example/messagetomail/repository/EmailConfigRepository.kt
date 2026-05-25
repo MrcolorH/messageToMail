@@ -15,6 +15,7 @@ import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
 import com.example.messagetomail.model.FeishuAppRobotConfig
 import com.example.messagetomail.model.FeishuRobotConfig
+import com.example.messagetomail.model.SmsFilterConfig
 import com.example.messagetomail.model.WecomRobotConfig
 import com.google.gson.Gson
 import kotlinx.coroutines.GlobalScope
@@ -47,6 +48,7 @@ class EmailConfigRepository(private val context: Context) {
         val WECOM_ENABLED_KEY = booleanPreferencesKey("wecom_enabled")
         val FEISHU_ENABLED_KEY = booleanPreferencesKey("feishu_enabled")
         val FEISHU_APP_ENABLED_KEY = booleanPreferencesKey("feishu_app_enabled")
+        val SMS_FILTER_CONFIG_KEY = stringPreferencesKey("sms_filter_config")
     }
 
     // === 读取 ===
@@ -90,6 +92,10 @@ class EmailConfigRepository(private val context: Context) {
 
     val feishuAppEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[FEISHU_APP_ENABLED_KEY] ?: false
+    }
+
+    val smsFilterConfigFlow: Flow<SmsFilterConfig?> = dataStore.data.map { prefs ->
+        prefs[SMS_FILTER_CONFIG_KEY]?.let { gson.fromJson(it, SmsFilterConfig::class.java) }
     }
 
     // === 写入 ===
@@ -150,6 +156,12 @@ class EmailConfigRepository(private val context: Context) {
     suspend fun setFeishuAppEnabled(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[FEISHU_APP_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveSmsFilterConfig(config: SmsFilterConfig) {
+        dataStore.edit { prefs ->
+            prefs[SMS_FILTER_CONFIG_KEY] = gson.toJson(config)
         }
     }
 
@@ -227,6 +239,10 @@ class EmailConfigRepository(private val context: Context) {
 
     fun isFeishuAppEnabledBlocking(): Boolean = runBlocking {
         feishuAppEnabledFlow.first()
+    }
+
+    fun getSmsFilterConfigBlocking(): SmsFilterConfig? = runBlocking {
+        smsFilterConfigFlow.first()
     }
 
     // === 清空 ===

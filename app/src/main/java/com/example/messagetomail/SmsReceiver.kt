@@ -12,6 +12,9 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import com.example.messagetomail.Utils.AppLogger
 import com.example.messagetomail.Utils.NotificationHelper
+import com.example.messagetomail.Utils.SmsContentFormatter
+import com.example.messagetomail.Utils.SmsFilter
+import com.example.messagetomail.repository.EmailConfigRepository
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -49,8 +52,26 @@ class SmsReceiver : BroadcastReceiver() {
             val messageBody = messages.joinToString(separator = "") { it.messageBody }
             AppLogger.i("SmsReceiver", "短信解析完成: sender=$sender, bodyLength=${messageBody.length}")
 
-            // 发送邮件
             if (context != null) {
+                val repository = EmailConfigRepository(context)
+
+                // 应用过滤规则
+                val filterConfig = repository.getSmsFilterConfigBlocking()
+                if (!SmsFilter.shouldForward(messageBody, filterConfig)) {
+                    AppLogger.i("SmsReceiver", "短信被过滤规则拦截，跳过转发")
+                    return
+                }
+
+                // 格式化消息内容
+                val formattedBody = SmsContentFormatter.format(messageBody, sender)
+                AppLogger.d("SmsReceiver", "格式化后消息: ${formattedBody.take(200)}")
+
+                // 发送邮件
+                val emailEnabled = repository.isEmailEnabledBlocking()
+                if (!emailEnabled) {
+                    AppLogger.i("SmsReceiver", "邮件转发已禁用，跳过")
+                    return
+                }
                 AppLogger.i("SmsReceiver", "触发邮件转发流程")
                 var devicePhoneNumber = "未知号码"
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
@@ -84,7 +105,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val emailIntent = Intent(context, EmailService::class.java).apply {
                     putExtra(EmailService.EXTRA_DEVICE_PHONE, devicePhoneNumber)
                     putExtra(EmailService.EXTRA_SENDER, sender)
-                    putExtra(EmailService.EXTRA_MESSAGE_BODY, messageBody)
+                    putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
                 }
 
                 try {
