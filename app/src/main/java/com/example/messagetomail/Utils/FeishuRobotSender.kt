@@ -1,34 +1,33 @@
 package com.example.messagetomail.Utils
 
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import android.util.Base64
 
 object FeishuRobotSender {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
 
     suspend fun send(webhookUrl: String, secret: String, title: String, content: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = URL(webhookUrl)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                conn.doOutput = true
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-
                 val text = if (title.isNotBlank()) "【短信转发】\n$title\n$content" else "【短信转发】\n$content"
                 val json = JSONObject().apply {
                     put("msg_type", "text")
                     put("content", JSONObject().apply {
                         put("text", text)
                     })
-                    // 如果配置了 secret，添加签名校验
                     if (secret.isNotBlank()) {
                         val timestamp = (System.currentTimeMillis() / 1000).toString()
                         val sign = genSign(secret, timestamp)
@@ -37,26 +36,28 @@ object FeishuRobotSender {
                     }
                 }
 
-                conn.outputStream.use { os ->
-                    os.write(json.toString().toByteArray(Charsets.UTF_8))
-                }
+                val body = json.toString().toRequestBody("application/json; charset=UTF-8".toMediaType())
+                val request = Request.Builder()
+                    .url(webhookUrl)
+                    .post(body)
+                    .build()
 
-                val responseCode = conn.responseCode
-                val response = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string() ?: ""
+                    AppLogger.i("FeishuRobot", "飞书机器人响应: code=${response.code}, body=$responseBody")
 
-                AppLogger.i("FeishuRobot", "飞书机器人响应: code=$responseCode, body=$response")
-
-                if (responseCode == 200) {
-                    val respJson = JSONObject(response)
-                    val code = respJson.optInt("code", -1)
-                    if (code == 0) {
-                        Result.success(Unit)
+                    if (response.isSuccessful) {
+                        val respJson = JSONObject(responseBody)
+                        val code = respJson.optInt("code", -1)
+                        if (code == 0) {
+                            Result.success(Unit)
+                        } else {
+                            val msg = respJson.optString("msg", "未知错误")
+                            Result.failure(Exception("飞书API错误($code): $msg"))
+                        }
                     } else {
-                        val msg = respJson.optString("msg", "未知错误")
-                        Result.failure(Exception("飞书API错误($code): $msg"))
+                        Result.failure(Exception("HTTP ${response.code}"))
                     }
-                } else {
-                    Result.failure(Exception("HTTP $responseCode"))
                 }
             } catch (e: Exception) {
                 AppLogger.e("FeishuRobot", "飞书机器人发送失败", e)

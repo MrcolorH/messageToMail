@@ -3,11 +3,19 @@ package com.example.messagetomail.Utils
 import com.example.messagetomail.model.FeishuAppReceiver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 
 object FeishuAppRobotSender {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
 
     private const val TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
     private const val MESSAGE_URL_TEMPLATE =
@@ -37,13 +45,11 @@ object FeishuAppRobotSender {
                     return@withContext Result.failure(Exception("接收者列表为空"))
                 }
 
-                // 1. 获取 tenant_access_token（只获取一次，复用）
                 val tokenResult = fetchTenantAccessToken(appId, appSecret)
                 tokenResult.onFailure { return@withContext Result.failure(it) }
                 val tenantAccessToken = tokenResult.getOrNull()
                     ?: return@withContext Result.failure(Exception("获取 token 失败"))
 
-                // 2. 遍历发送给每个接收者
                 val failures = mutableListOf<String>()
                 receivers.forEach { receiver ->
                     val result = sendSingle(tenantAccessToken, receiver.receiveId, receiver.receiveIdType, title, content)
@@ -72,46 +78,39 @@ object FeishuAppRobotSender {
         content: String
     ): Result<Unit> {
         return try {
-            val url = URL(MESSAGE_URL_TEMPLATE.format(receiveIdType))
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-            conn.setRequestProperty("Authorization", "Bearer $tenantAccessToken")
-            conn.doOutput = true
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
-
             val text = if (title.isNotBlank()) "【短信转发】\n$title\n$content" else "【短信转发】\n$content"
             val contentJson = JSONObject().apply {
                 put("text", text)
             }
-
             val json = JSONObject().apply {
                 put("receive_id", receiveId)
                 put("msg_type", "text")
                 put("content", contentJson.toString())
             }
 
-            conn.outputStream.use { os ->
-                os.write(json.toString().toByteArray(Charsets.UTF_8))
-            }
+            val body = json.toString().toRequestBody("application/json; charset=UTF-8".toMediaType())
+            val request = Request.Builder()
+                .url(MESSAGE_URL_TEMPLATE.format(receiveIdType))
+                .post(body)
+                .header("Authorization", "Bearer $tenantAccessToken")
+                .build()
 
-            val responseCode = conn.responseCode
-            val response = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                AppLogger.i("FeishuAppRobot", "发送给 $receiveId 响应: code=${response.code}, body=$responseBody")
 
-            AppLogger.i("FeishuAppRobot", "发送给 $receiveId 响应: code=$responseCode, body=$response")
-
-            if (responseCode == 200) {
-                val respJson = JSONObject(response)
-                val code = respJson.optInt("code", -1)
-                if (code == 0) {
-                    Result.success(Unit)
+                if (response.isSuccessful) {
+                    val respJson = JSONObject(responseBody)
+                    val code = respJson.optInt("code", -1)
+                    if (code == 0) {
+                        Result.success(Unit)
+                    } else {
+                        val msg = respJson.optString("msg", "未知错误")
+                        Result.failure(Exception("飞书API错误($code): $msg"))
+                    }
                 } else {
-                    val msg = respJson.optString("msg", "未知错误")
-                    Result.failure(Exception("飞书API错误($code): $msg"))
+                    Result.failure(Exception("HTTP ${response.code}"))
                 }
-            } else {
-                Result.failure(Exception("HTTP $responseCode"))
             }
         } catch (e: Exception) {
             AppLogger.e("FeishuAppRobot", "发送给 $receiveId 失败", e)
@@ -121,44 +120,38 @@ object FeishuAppRobotSender {
 
     private fun fetchTenantAccessToken(appId: String, appSecret: String): Result<String> {
         return try {
-            val url = URL(TOKEN_URL)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-            conn.doOutput = true
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
-
             val json = JSONObject().apply {
                 put("app_id", appId)
                 put("app_secret", appSecret)
             }
 
-            conn.outputStream.use { os ->
-                os.write(json.toString().toByteArray(Charsets.UTF_8))
-            }
+            val body = json.toString().toRequestBody("application/json; charset=UTF-8".toMediaType())
+            val request = Request.Builder()
+                .url(TOKEN_URL)
+                .post(body)
+                .build()
 
-            val responseCode = conn.responseCode
-            val response = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                AppLogger.i("FeishuAppRobot", "获取token响应: code=${response.code}, body=$responseBody")
 
-            AppLogger.i("FeishuAppRobot", "获取token响应: code=$responseCode, body=$response")
-
-            if (responseCode == 200) {
-                val respJson = JSONObject(response)
-                val code = respJson.optInt("code", -1)
-                if (code == 0) {
-                    val token = respJson.optString("tenant_access_token", "")
-                    if (token.isNotBlank()) {
-                        Result.success(token)
+                if (response.isSuccessful) {
+                    val respJson = JSONObject(responseBody)
+                    val code = respJson.optInt("code", -1)
+                    if (code == 0) {
+                        val token = respJson.optString("tenant_access_token", "")
+                        if (token.isNotBlank()) {
+                            Result.success(token)
+                        } else {
+                            Result.failure(Exception("token 为空"))
+                        }
                     } else {
-                        Result.failure(Exception("token 为空"))
+                        val msg = respJson.optString("msg", "未知错误")
+                        Result.failure(Exception("获取token失败($code): $msg"))
                     }
                 } else {
-                    val msg = respJson.optString("msg", "未知错误")
-                    Result.failure(Exception("获取token失败($code): $msg"))
+                    Result.failure(Exception("HTTP ${response.code}"))
                 }
-            } else {
-                Result.failure(Exception("HTTP $responseCode"))
             }
         } catch (e: Exception) {
             AppLogger.e("FeishuAppRobot", "获取tenant_access_token失败", e)
