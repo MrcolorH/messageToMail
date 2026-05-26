@@ -29,7 +29,9 @@ import com.example.messagetomail.Utils.FeishuRobotSender
 import com.example.messagetomail.Utils.WecomRobotSender
 import com.example.messagetomail.model.FeishuAppRobotConfig
 import com.example.messagetomail.model.FeishuRobotConfig
+import com.example.messagetomail.model.SimFilterConfig
 import com.example.messagetomail.model.WecomRobotConfig
+import com.example.messagetomail.Utils.SimInfoHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +41,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var repository: EmailConfigRepository
 
     private lateinit var tvServiceRunningBanner: TextView
+
+    // SIM 卡
+    private lateinit var tvSimStatus: TextView
+    private lateinit var containerSimCards: LinearLayout
 
     // 邮箱卡片
     private lateinit var headerEmail: LinearLayout
@@ -197,6 +203,9 @@ class SettingsActivity : AppCompatActivity() {
             btnTestFeishuApp.isEnabled = false
             btnExportFeishuApp.isEnabled = false
             btnImportFeishuApp.isEnabled = false
+            for (i in 0 until containerSimCards.childCount) {
+                containerSimCards.getChildAt(i).isEnabled = false
+            }
         } else {
             tvServiceRunningBanner.visibility = TextView.GONE
         }
@@ -204,6 +213,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun initViews() {
         tvServiceRunningBanner = findViewById(R.id.tvServiceRunningBanner)
+
+        tvSimStatus = findViewById(R.id.tvSimStatus)
+        containerSimCards = findViewById(R.id.containerSimCards)
 
         headerEmail = findViewById(R.id.headerEmail)
         contentEmail = findViewById(R.id.contentEmail)
@@ -772,6 +784,11 @@ class SettingsActivity : AppCompatActivity() {
                         refreshFeishuAppUI(config)
                     }
                 }
+                launch {
+                    repository.simFilterConfigFlow.collect { config ->
+                        refreshSimCards(config)
+                    }
+                }
             }
         }
     }
@@ -903,6 +920,43 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             containerFeishuReceivers.addView(itemView)
+        }
+    }
+
+    private fun refreshSimCards(config: SimFilterConfig?) {
+        val sims = SimInfoHelper.getActiveSims(this)
+        containerSimCards.removeAllViews()
+        when {
+            sims.isEmpty() -> {
+                tvSimStatus.text = "未检测到SIM卡信息（可能需要READ_PHONE_STATE权限）"
+            }
+            sims.size == 1 -> {
+                val sim = sims[0]
+                tvSimStatus.text = "当前设备仅有一张SIM卡：${sim.displayName} [卡槽${sim.slotIndex + 1}]"
+            }
+            else -> {
+                tvSimStatus.text = "检测到 ${sims.size} 张SIM卡，请选择要监听的卡："
+                val enabledSet = config?.enabledSubscriptions ?: emptySet()
+                sims.forEach { sim ->
+                    val checkBox = android.widget.CheckBox(this).apply {
+                        text = "${sim.displayName} [卡槽${sim.slotIndex + 1}]${sim.number?.let { " ($it)" } ?: ""}"
+                        isChecked = enabledSet.contains(sim.subscriptionId)
+                        setOnCheckedChangeListener { _, isChecked ->
+                            if (serviceRunning) return@setOnCheckedChangeListener
+                            val currentSet = enabledSet.toMutableSet()
+                            if (isChecked) {
+                                currentSet.add(sim.subscriptionId)
+                            } else {
+                                currentSet.remove(sim.subscriptionId)
+                            }
+                            lifecycleScope.launch {
+                                repository.saveSimFilterConfig(SimFilterConfig(currentSet))
+                            }
+                        }
+                    }
+                    containerSimCards.addView(checkBox)
+                }
+            }
         }
     }
 

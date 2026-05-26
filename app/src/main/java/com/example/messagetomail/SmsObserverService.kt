@@ -14,6 +14,7 @@ import com.example.messagetomail.Utils.FeishuAppRobotSender
 import com.example.messagetomail.Utils.FeishuRobotSender
 import com.example.messagetomail.Utils.NotificationHelper
 import com.example.messagetomail.Utils.SmsContentFormatter
+import com.example.messagetomail.Utils.SimInfoHelper
 import com.example.messagetomail.Utils.SmsFilter
 import com.example.messagetomail.Utils.WecomRobotSender
 import com.example.messagetomail.repository.EmailConfigRepository
@@ -91,7 +92,7 @@ class SmsObserverService : Service() {
         recentForwards.add(Triple(address, body.take(100), System.currentTimeMillis()))
     }
 
-    private fun forwardSms(address: String, body: String) {
+    private fun forwardSms(address: String, body: String, simLabel: String? = null) {
         if (isRecentlyForwarded(address, body)) {
             AppLogger.d("SmsObserver", "短信短期内已转发过，跳过去重: sender=$address")
             return
@@ -104,7 +105,7 @@ class SmsObserverService : Service() {
             return
         }
 
-        val formattedBody = SmsContentFormatter.format(body, address)
+        val formattedBody = SmsContentFormatter.format(body, address, simLabel)
         AppLogger.d("SmsObserver", "格式化后消息: ${formattedBody.take(200)}")
 
         NotificationHelper.showNotification(
@@ -210,7 +211,8 @@ class SmsObserverService : Service() {
                 Telephony.Sms.BODY,
                 Telephony.Sms.DATE,
                 Telephony.Sms.TYPE,
-                Telephony.Sms.READ
+                Telephony.Sms.READ,
+                Telephony.Sms.SUBSCRIPTION_ID
             )
 
             val cursor = contentResolver.query(
@@ -233,6 +235,7 @@ class SmsObserverService : Service() {
                     val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "未知号码"
                     val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
                     val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
+                    val subscriptionId = it.getInt(it.getColumnIndexOrThrow(Telephony.Sms.SUBSCRIPTION_ID))
 
                     val sixtySecondsAgo = System.currentTimeMillis() - 60_000
                     if (date < sixtySecondsAgo) {
@@ -240,11 +243,27 @@ class SmsObserverService : Service() {
                         return
                     }
 
+                    // SIM 卡过滤
+                    val activeSims = SimInfoHelper.getActiveSims(this@SmsObserverService)
+                    val simFilterConfig = repository.getSimFilterConfigBlocking()
+                    if (activeSims.size > 1 && simFilterConfig != null && simFilterConfig.enabledSubscriptions.isNotEmpty()) {
+                        if (!simFilterConfig.enabledSubscriptions.contains(subscriptionId)) {
+                            AppLogger.i("SmsObserver", "短信来自未启用的SIM卡(subId=$subscriptionId)，跳过转发")
+                            return
+                        }
+                    }
+
                     lastProcessedId = id
 
-                    AppLogger.i("SmsObserver", "检测到新短信: id=$id, sender=$address, bodyLength=${body.length}, date=$date")
+                    AppLogger.i("SmsObserver", "检测到新短信: id=$id, sender=$address, subId=$subscriptionId, bodyLength=${body.length}, date=$date")
 
-                    forwardSms(address, body)
+                    val simInfo = activeSims.find { sim -> sim.subscriptionId == subscriptionId }
+                    val simLabel = simInfo?.let { info ->
+                        val numberPart = info.number?.let { n -> " ($n)" } ?: ""
+                        "${info.displayName} [卡槽${info.slotIndex + 1}]$numberPart"
+                    }
+
+                    forwardSms(address, body, simLabel)
                 } else {
                     AppLogger.d("SmsObserver", "cursor moveToFirst 失败，queryUri=$queryUri")
                 }

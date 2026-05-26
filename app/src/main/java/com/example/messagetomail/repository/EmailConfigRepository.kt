@@ -15,6 +15,7 @@ import com.example.messagetomail.model.ReceiverConfig
 import com.example.messagetomail.model.SenderConfig
 import com.example.messagetomail.model.FeishuAppRobotConfig
 import com.example.messagetomail.model.FeishuRobotConfig
+import com.example.messagetomail.model.SimFilterConfig
 import com.example.messagetomail.model.SmsFilterConfig
 import com.example.messagetomail.model.WecomRobotConfig
 import com.google.gson.Gson
@@ -49,6 +50,7 @@ class EmailConfigRepository(private val context: Context) {
         val FEISHU_ENABLED_KEY = booleanPreferencesKey("feishu_enabled")
         val FEISHU_APP_ENABLED_KEY = booleanPreferencesKey("feishu_app_enabled")
         val SMS_FILTER_CONFIG_KEY = stringPreferencesKey("sms_filter_config")
+        val SIM_FILTER_CONFIG_KEY = stringPreferencesKey("sim_filter_config")
     }
 
     // === 读取 ===
@@ -96,6 +98,10 @@ class EmailConfigRepository(private val context: Context) {
 
     val smsFilterConfigFlow: Flow<SmsFilterConfig?> = dataStore.data.map { prefs ->
         prefs[SMS_FILTER_CONFIG_KEY]?.let { gson.fromJson(it, SmsFilterConfig::class.java) }
+    }
+
+    val simFilterConfigFlow: Flow<SimFilterConfig?> = dataStore.data.map { prefs ->
+        prefs[SIM_FILTER_CONFIG_KEY]?.let { gson.fromJson(it, SimFilterConfig::class.java) }
     }
 
     // === 写入 ===
@@ -162,6 +168,12 @@ class EmailConfigRepository(private val context: Context) {
     suspend fun saveSmsFilterConfig(config: SmsFilterConfig) {
         dataStore.edit { prefs ->
             prefs[SMS_FILTER_CONFIG_KEY] = gson.toJson(config)
+        }
+    }
+
+    suspend fun saveSimFilterConfig(config: SimFilterConfig) {
+        dataStore.edit { prefs ->
+            prefs[SIM_FILTER_CONFIG_KEY] = gson.toJson(config)
         }
     }
 
@@ -243,6 +255,10 @@ class EmailConfigRepository(private val context: Context) {
 
     fun getSmsFilterConfigBlocking(): SmsFilterConfig? = runBlocking {
         smsFilterConfigFlow.first()
+    }
+
+    fun getSimFilterConfigBlocking(): SimFilterConfig? = runBlocking {
+        simFilterConfigFlow.first()
     }
 
     // === 清空 ===

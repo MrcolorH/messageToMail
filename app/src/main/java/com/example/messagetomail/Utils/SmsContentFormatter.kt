@@ -30,20 +30,21 @@ object SmsContentFormatter {
 
     /**
      * 格式化短信内容
-     * - 包含验证码时：验证码 + 平台 + 来自 + 正文
-     * - 不包含验证码时：发送者 + 正文
+     * - 包含验证码时：验证码 + 平台 + 来自 + SIM卡 + 正文
+     * - 不包含验证码时：发送者 + SIM卡 + 正文
      */
-    fun format(body: String, sender: String? = null): String {
+    fun format(body: String, sender: String? = null, simLabel: String? = null): String {
         val codeResult = extractCode(body)
         val senderLine = if (!sender.isNullOrBlank() && sender != "未知号码") "来自：$sender" else ""
+        val simLine = if (!simLabel.isNullOrBlank()) "SIM卡：$simLabel" else ""
         return if (codeResult != null) {
             val platform = extractPlatform(body) ?: ""
             val codeLine = "验证码：${codeResult.code}"
             val platformLine = if (platform.isNotBlank()) "平台：$platform" else ""
             val bodyLine = "正文：$body"
-            listOf(codeLine, platformLine, senderLine, bodyLine).filter { it.isNotBlank() }.joinToString("\n")
+            listOf(codeLine, platformLine, senderLine, simLine, bodyLine).filter { it.isNotBlank() }.joinToString("\n")
         } else {
-            listOf(senderLine, body).filter { it.isNotBlank() }.joinToString("\n")
+            listOf(senderLine, simLine, body).filter { it.isNotBlank() }.joinToString("\n")
         }
     }
 
