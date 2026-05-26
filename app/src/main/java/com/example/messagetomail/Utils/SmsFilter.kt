@@ -7,13 +7,16 @@ object SmsFilter {
 
     /**
      * 判断一条短信是否应该被转发
+     * @param body 短信内容
+     * @param sender 发件人号码或名称
+     * @param config 过滤配置
      */
-    fun shouldForward(body: String, config: SmsFilterConfig?): Boolean {
+    fun shouldForward(body: String, sender: String, config: SmsFilterConfig?): Boolean {
         val mode = config?.filterMode ?: FilterMode.ALL
         return when (mode) {
             FilterMode.ALL -> true
             FilterMode.NOTIFICATION -> isNotificationSms(body)
-            FilterMode.CUSTOM -> matchesCustomRules(body, config?.customRules ?: emptyList())
+            FilterMode.CUSTOM -> matchesCustomRules(body, sender, config?.customRules ?: emptyList())
         }
     }
 
@@ -40,12 +43,14 @@ object SmsFilter {
 
     /**
      * 是否匹配用户自定义的正则规则
+     * 规则同时作用于短信内容和发件人（号码/名称）
      */
-    private fun matchesCustomRules(body: String, rules: List<String>): Boolean {
+    private fun matchesCustomRules(body: String, sender: String, rules: List<String>): Boolean {
         if (rules.isEmpty()) return false
         return rules.any { pattern ->
             pattern.isNotBlank() && runCatching {
-                Regex(pattern).containsMatchIn(body)
+                val regex = Regex(pattern)
+                regex.containsMatchIn(body) || regex.containsMatchIn(sender)
             }.getOrDefault(false)
         }
     }

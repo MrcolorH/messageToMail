@@ -99,7 +99,7 @@ class SmsObserverService : Service() {
         markForwarded(address, body)
 
         val filterConfig = repository.getSmsFilterConfigBlocking()
-        if (!SmsFilter.shouldForward(body, filterConfig)) {
+        if (!SmsFilter.shouldForward(body, address, filterConfig)) {
             AppLogger.i("SmsObserver", "短信被过滤规则拦截，跳过转发")
             return
         }
