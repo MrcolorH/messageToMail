@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -12,10 +14,12 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.messagetomail.model.FilterMode
 import com.example.messagetomail.model.SmsFilterConfig
 import com.example.messagetomail.repository.EmailConfigRepository
+import com.example.messagetomail.Utils.SmsFilter
 import kotlinx.coroutines.launch
 
 class FilterRuleActivity : AppCompatActivity() {
@@ -30,6 +34,10 @@ class FilterRuleActivity : AppCompatActivity() {
     private lateinit var containerRules: LinearLayout
     private lateinit var btnAddRule: Button
     private lateinit var btnSaveFilter: Button
+
+    private lateinit var etTestSender: EditText
+    private lateinit var etTestBody: EditText
+    private lateinit var tvTestResult: TextView
 
     private val ruleEditTexts = mutableListOf<EditText>()
     private var currentConfig: SmsFilterConfig? = null
@@ -61,6 +69,10 @@ class FilterRuleActivity : AppCompatActivity() {
         containerRules = findViewById(R.id.containerRules)
         btnAddRule = findViewById(R.id.btnAddRule)
         btnSaveFilter = findViewById(R.id.btnSaveFilter)
+
+        etTestSender = findViewById(R.id.etTestSender)
+        etTestBody = findViewById(R.id.etTestBody)
+        tvTestResult = findViewById(R.id.tvTestResult)
     }
 
     private fun setupListeners() {
@@ -69,6 +81,7 @@ class FilterRuleActivity : AppCompatActivity() {
                 R.id.rbCustom -> cardCustomRules.visibility = LinearLayout.VISIBLE
                 else -> cardCustomRules.visibility = LinearLayout.GONE
             }
+            runTest()
         }
 
         btnAddRule.setOnClickListener {
@@ -83,6 +96,14 @@ class FilterRuleActivity : AppCompatActivity() {
         btnSaveFilter.setOnClickListener {
             saveConfig()
         }
+
+        val testWatcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { runTest() }
+        }
+        etTestSender.addTextChangedListener(testWatcher)
+        etTestBody.addTextChangedListener(testWatcher)
     }
 
     private fun loadConfig() {
@@ -113,10 +134,17 @@ class FilterRuleActivity : AppCompatActivity() {
         etRule.setText(text)
         ruleEditTexts.add(etRule)
 
+        etRule.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { runTest() }
+        })
+
         btnDelete.setOnClickListener {
             containerRules.removeView(itemView)
             ruleEditTexts.remove(etRule)
             updateRuleCount()
+            runTest()
         }
 
         containerRules.addView(itemView)
@@ -125,6 +153,34 @@ class FilterRuleActivity : AppCompatActivity() {
     private fun updateRuleCount() {
         tvRuleCount.text = "已添加规则 (${ruleEditTexts.size}/${SmsFilterConfig.MAX_RULES})"
         btnAddRule.isEnabled = ruleEditTexts.size < SmsFilterConfig.MAX_RULES
+    }
+
+    private fun runTest() {
+        val sender = etTestSender.text.toString()
+        val body = etTestBody.text.toString()
+
+        if (body.isBlank() && sender.isBlank()) {
+            tvTestResult.text = "结果：未输入"
+            tvTestResult.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            return
+        }
+
+        val mode = when (rgFilterMode.checkedRadioButtonId) {
+            R.id.rbNotification -> FilterMode.NOTIFICATION
+            R.id.rbCustom -> FilterMode.CUSTOM
+            else -> FilterMode.ALL
+        }
+        val rules = ruleEditTexts.map { it.text.toString().trim() }.filter { it.isNotBlank() }
+        val config = SmsFilterConfig(mode, rules)
+        val shouldForward = SmsFilter.shouldForward(body, sender, config)
+
+        if (shouldForward) {
+            tvTestResult.text = "结果：✅ 匹配成功（将转发）"
+            tvTestResult.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+        } else {
+            tvTestResult.text = "结果：❌ 不匹配（将跳过）"
+            tvTestResult.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+        }
     }
 
     private fun saveConfig() {
