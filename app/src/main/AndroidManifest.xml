@@ -73,6 +73,11 @@
             android:exported="false"
             android:label="选择群聊" />
 
+        <activity
+            android:name=".ForwardHistoryActivity"
+            android:exported="false"
+            android:label="转发记录" />
+
         <!-- 短信接收器 -->
         <receiver
             android:name=".SmsReceiver"

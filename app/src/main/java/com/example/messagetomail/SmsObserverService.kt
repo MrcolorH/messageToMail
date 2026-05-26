@@ -17,6 +17,8 @@ import com.example.messagetomail.Utils.SmsContentFormatter
 import com.example.messagetomail.Utils.SimInfoHelper
 import com.example.messagetomail.Utils.SmsFilter
 import com.example.messagetomail.Utils.WecomRobotSender
+import com.example.messagetomail.database.AppDatabase
+import com.example.messagetomail.model.ForwardRecord
 import com.example.messagetomail.repository.EmailConfigRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -130,6 +132,7 @@ class SmsObserverService : Service() {
                 putExtra(EmailService.EXTRA_DEVICE_PHONE, "本机号码")
                 putExtra(EmailService.EXTRA_SENDER, address)
                 putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
+                putExtra(EmailService.EXTRA_SIM_LABEL, simLabel)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(emailIntent)
@@ -148,8 +151,10 @@ class SmsObserverService : Service() {
                 )
                 result.onSuccess {
                     AppLogger.i("SmsObserver", "企微机器人发送成功")
+                    recordForward(address, body, simLabel, "wecom", true, null)
                 }.onFailure {
                     AppLogger.e("SmsObserver", "企微机器人发送失败: ${it.message}")
+                    recordForward(address, body, simLabel, "wecom", false, it.message)
                 }
             }
         }
@@ -164,8 +169,10 @@ class SmsObserverService : Service() {
                 )
                 result.onSuccess {
                     AppLogger.i("SmsObserver", "飞书机器人发送成功")
+                    recordForward(address, body, simLabel, "feishu", true, null)
                 }.onFailure {
                     AppLogger.e("SmsObserver", "飞书机器人发送失败: ${it.message}")
+                    recordForward(address, body, simLabel, "feishu", false, it.message)
                 }
             }
         }
@@ -181,9 +188,38 @@ class SmsObserverService : Service() {
                 )
                 result.onSuccess {
                     AppLogger.i("SmsObserver", "飞书应用机器人发送成功")
+                    recordForward(address, body, simLabel, "feishu_app", true, null)
                 }.onFailure {
                     AppLogger.e("SmsObserver", "飞书应用机器人发送失败: ${it.message}")
+                    recordForward(address, body, simLabel, "feishu_app", false, it.message)
                 }
+            }
+        }
+    }
+
+    private fun recordForward(
+        address: String,
+        body: String,
+        simLabel: String?,
+        channel: String,
+        success: Boolean,
+        errorReason: String?
+    ) {
+        serviceScope.launch {
+            try {
+                val dao = AppDatabase.getDatabase(this@SmsObserverService).forwardRecordDao()
+                dao.insert(
+                    ForwardRecord(
+                        sender = address,
+                        body = body,
+                        simLabel = simLabel,
+                        channel = channel,
+                        success = success,
+                        errorReason = errorReason
+                    )
+                )
+            } catch (e: Exception) {
+                AppLogger.e("SmsObserver", "记录转发历史失败", e)
             }
         }
     }

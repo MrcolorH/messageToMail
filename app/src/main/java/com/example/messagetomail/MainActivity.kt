@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
         val toggleButton: Button = findViewById(R.id.button)
         val btnSettings: Button = findViewById(R.id.btnSettings)
         val btnFilterRule: Button = findViewById(R.id.btnFilterRule)
+        val btnHistory: Button = findViewById(R.id.btnHistory)
         val btnLogs: Button = findViewById(R.id.btnLogs)
         val btnHelp: Button = findViewById(R.id.btnHelp)
 
@@ -147,6 +148,11 @@ class MainActivity : AppCompatActivity() {
         btnFilterRule.setOnClickListener {
             AppLogger.i("MainActivity", "跳转到转发规则页面")
             startActivity(FilterRuleActivity.createIntent(this))
+        }
+
+        btnHistory.setOnClickListener {
+            AppLogger.i("MainActivity", "跳转到转发记录页面")
+            startActivity(ForwardHistoryActivity.createIntent(this))
         }
 
         btnLogs.setOnClickListener {
