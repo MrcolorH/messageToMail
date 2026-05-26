@@ -389,6 +389,17 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val webhook = etWecomWebhook.text.toString().trim()
+
+            if (!cbWecomEnabled.isChecked) {
+                lifecycleScope.launch {
+                    repository.saveWecomConfig(WecomRobotConfig(webhook, false))
+                }
+                AppLogger.i("Settings", "企微通知已关闭，直接保存配置")
+                Toast.makeText(this, "配置已保存（企微通知已关闭）", Toast.LENGTH_SHORT).show()
+                tvWecomStatus.text = "⏸️ 企微通知已关闭"
+                return@setOnClickListener
+            }
+
             if (webhook.isEmpty()) {
                 Toast.makeText(this, "请输入企业微信 Webhook 地址", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -424,6 +435,18 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val webhook = etFeishuWebhook.text.toString().trim()
+            val secret = etFeishuSecret.text.toString().trim()
+
+            if (!cbFeishuEnabled.isChecked) {
+                lifecycleScope.launch {
+                    repository.saveFeishuConfig(FeishuRobotConfig(webhook, secret, false))
+                }
+                AppLogger.i("Settings", "飞书通知已关闭，直接保存配置")
+                Toast.makeText(this, "配置已保存（飞书通知已关闭）", Toast.LENGTH_SHORT).show()
+                tvFeishuStatus.text = "⏸️ 飞书通知已关闭"
+                return@setOnClickListener
+            }
+
             if (webhook.isEmpty()) {
                 Toast.makeText(this, "请输入飞书 Webhook 地址", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -431,7 +454,6 @@ class SettingsActivity : AppCompatActivity() {
             tvFeishuStatus.text = "⏳ 正在测试飞书机器人..."
             btnTestFeishu.isEnabled = false
             lifecycleScope.launch {
-                val secret = etFeishuSecret.text.toString().trim()
                 val result = FeishuRobotSender.send(webhook, secret, "测试消息", "这是一条来自短信转邮件App的测试消息")
                 btnTestFeishu.isEnabled = true
                 result.onSuccess {
@@ -457,6 +479,10 @@ class SettingsActivity : AppCompatActivity() {
         btnPickFeishuReceiver.setOnClickListener {
             if (serviceRunning) {
                 Toast.makeText(this, "服务运行中，无法修改配置", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!cbFeishuAppEnabled.isChecked) {
+                Toast.makeText(this, "飞书应用通知已关闭", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val appId = etFeishuAppId.text.toString().trim()
@@ -491,6 +517,19 @@ class SettingsActivity : AppCompatActivity() {
             val appId = etFeishuAppId.text.toString().trim()
             val appSecret = etFeishuAppSecret.text.toString().trim()
             val receivers = currentFeishuApp?.receivers ?: emptyList()
+
+            if (!cbFeishuAppEnabled.isChecked) {
+                lifecycleScope.launch {
+                    repository.saveFeishuAppConfig(
+                        FeishuAppRobotConfig(appId, appSecret, receivers, false)
+                    )
+                }
+                AppLogger.i("Settings", "飞书应用通知已关闭，直接保存配置")
+                Toast.makeText(this, "配置已保存（飞书应用通知已关闭）", Toast.LENGTH_SHORT).show()
+                tvFeishuAppStatus.text = "⏸️ 飞书应用通知已关闭"
+                return@setOnClickListener
+            }
+
             if (appId.isEmpty() || appSecret.isEmpty()) {
                 Toast.makeText(this, "请填写 App ID 和 App Secret", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -877,13 +916,6 @@ class SettingsActivity : AppCompatActivity() {
         val smtpHost = etSmtpHost.text.toString().trim()
         val smtpPort = etSmtpPort.text.toString().trim()
 
-        if (account.isEmpty() || credential.isEmpty() || smtpHost.isEmpty() || smtpPort.isEmpty()) {
-            AppLogger.w("Settings", "保存发件人配置失败：信息不完整")
-            Toast.makeText(this, "请填写完整信息", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        AppLogger.i("Settings", "准备保存发件人配置: type=$type, account=$account, smtp=$smtpHost:$smtpPort")
         val config = SenderConfig(
             emailType = type,
             account = account,
@@ -892,6 +924,25 @@ class SettingsActivity : AppCompatActivity() {
             smtpPort = smtpPort,
             useSsl = true
         )
+
+        if (!cbEmailEnabled.isChecked) {
+            lifecycleScope.launch {
+                repository.saveSenderConfig(config)
+                currentSender = config
+            }
+            AppLogger.i("Settings", "邮件通知已关闭，直接保存发件人配置")
+            Toast.makeText(this, "配置已保存（邮件通知已关闭）", Toast.LENGTH_SHORT).show()
+            tvSenderStatus.text = "⏸️ 邮件通知已关闭"
+            return
+        }
+
+        if (account.isEmpty() || credential.isEmpty() || smtpHost.isEmpty() || smtpPort.isEmpty()) {
+            AppLogger.w("Settings", "保存发件人配置失败：信息不完整")
+            Toast.makeText(this, "请填写完整信息", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        AppLogger.i("Settings", "准备保存发件人配置: type=$type, account=$account, smtp=$smtpHost:$smtpPort")
 
         tvSenderStatus.text = "⏳ 正在验证连通性..."
         btnSaveSender.isEnabled = false
