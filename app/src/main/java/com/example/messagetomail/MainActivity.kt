@@ -4,6 +4,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
@@ -19,9 +20,11 @@ import android.Manifest
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import com.example.messagetomail.Utils.NotificationHelper
+import com.example.messagetomail.database.AppDatabase
 import android.content.Intent
 import android.net.Uri
 import androidx.appcompat.app.AlertDialog
+import java.util.Calendar
 
 
 class MainActivity : AppCompatActivity() {
@@ -30,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private val SMS_PERMISSION_REQUEST_CODE = 123
 
     private lateinit var repository: EmailConfigRepository
+    private lateinit var tvStats: TextView
     private var configValid = false
     private var emailEnabled = true
     private var wecomEnabled = false
@@ -63,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         val btnHistory: Button = findViewById(R.id.btnHistory)
         val btnLogs: Button = findViewById(R.id.btnLogs)
         val btnHelp: Button = findViewById(R.id.btnHelp)
+        tvStats = findViewById(R.id.tvStats)
 
         // 观察配置有效性和各服务开关状态
         lifecycleScope.launch {
@@ -124,6 +129,7 @@ class MainActivity : AppCompatActivity() {
                     viewModel.setContent(buildActiveChannelsText())
                     btnSettings.isEnabled = false
                     AppLogger.i("MainActivity", "服务已开启，短信监听服务已启动")
+                    refreshStats()
                 } else {
                     Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
                     AppLogger.e("MainActivity", "启动失败：权限不足")
@@ -137,6 +143,7 @@ class MainActivity : AppCompatActivity() {
                 viewModel.setContent("服务停用")
                 btnSettings.isEnabled = true
                 AppLogger.i("MainActivity", "服务已关闭")
+                refreshStats()
             }
         }
 
@@ -164,6 +171,13 @@ class MainActivity : AppCompatActivity() {
             AppLogger.i("MainActivity", "跳转到使用说明页面")
             startActivity(HelpActivity.createIntent(this))
         }
+
+        refreshStats()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshStats()
     }
 
 
@@ -178,6 +192,63 @@ class MainActivity : AppCompatActivity() {
             "服务已启用（未配置转发渠道）"
         } else {
             "已启用转发：${channels.joinToString("、")}"
+        }
+    }
+
+    private fun refreshStats() {
+        lifecycleScope.launch {
+            try {
+                val dao = AppDatabase.getDatabase(this@MainActivity).forwardRecordDao()
+
+                val todayStart = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                val weekStart = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                val todayRecords = dao.getRecordsSince(todayStart)
+                val weekRecords = dao.getRecordsSince(weekStart)
+
+                val todaySuccess = todayRecords.count { it.success }
+                val todayFailure = todayRecords.count { !it.success }
+                val weekSuccess = weekRecords.count { it.success }
+                val weekFailure = weekRecords.count { !it.success }
+
+                val channelStats = todayRecords.groupBy { it.channel }.map { (channel, records) ->
+                    val s = records.count { it.success }
+                    val f = records.count { !it.success }
+                    val label = when (channel) {
+                        "email" -> "邮件"
+                        "wecom" -> "企微"
+                        "feishu" -> "飞书"
+                        "feishu_app" -> "飞书应用"
+                        else -> channel
+                    }
+                    "$label：$s 成功 / $f 失败"
+                }.joinToString("\n")
+
+                val statsText = buildString {
+                    appendLine("今日：${todayRecords.size} 条（$todaySuccess 成功 / $todayFailure 失败）")
+                    appendLine("本周：${weekRecords.size} 条（$weekSuccess 成功 / $weekFailure 失败）")
+                    if (channelStats.isNotBlank()) {
+                        appendLine("---")
+                        append(channelStats)
+                    }
+                }
+
+                tvStats.text = statsText
+            } catch (e: Exception) {
+                tvStats.text = "统计加载失败"
+            }
         }
     }
 

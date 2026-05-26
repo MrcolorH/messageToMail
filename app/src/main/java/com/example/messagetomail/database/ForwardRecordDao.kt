@@ -32,4 +32,7 @@ interface ForwardRecordDao {
 
     @Query("SELECT COUNT(*) FROM forward_records WHERE timestamp >= :startTime")
     suspend fun getCountSince(startTime: Long): Int
+
+    @Query("SELECT * FROM forward_records WHERE timestamp >= :startTime ORDER BY timestamp DESC")
+    suspend fun getRecordsSince(startTime: Long): List<ForwardRecord>
 }
