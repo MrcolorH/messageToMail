@@ -15,11 +15,26 @@ class AppLogger private constructor(private val context: Context) {
 
     private val logs = CopyOnWriteArrayList<LogEntry>()
     private val maxMemoryLogs = 200
+    private val maxFileSize = 5 * 1024 * 1024L // 5MB
+    private val maxBackupIndex = 3
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val logFile: File by lazy {
         File(context.filesDir, "app_logs.txt")
+    }
+
+    private fun rotateLogsIfNeeded() {
+        if (!logFile.exists() || logFile.length() < maxFileSize) return
+        val oldestBackup = File(context.filesDir, "app_logs.txt.$maxBackupIndex")
+        if (oldestBackup.exists()) oldestBackup.delete()
+        for (i in maxBackupIndex - 1 downTo 1) {
+            val src = File(context.filesDir, "app_logs.txt.$i")
+            val dst = File(context.filesDir, "app_logs.txt.${i + 1}")
+            if (src.exists()) src.renameTo(dst)
+        }
+        val backup1 = File(context.filesDir, "app_logs.txt.1")
+        logFile.renameTo(backup1)
     }
 
     data class LogEntry(
@@ -100,6 +115,7 @@ class AppLogger private constructor(private val context: Context) {
         // 异步写入文件
         scope.launch {
             try {
+                rotateLogsIfNeeded()
                 logFile.appendText("${entry}\n")
             } catch (e: Exception) {
                 Log.e("AppLogger", "写入日志文件失败", e)
@@ -113,9 +129,11 @@ class AppLogger private constructor(private val context: Context) {
 
     fun getLogsFromFile(): List<LogEntry> {
         return try {
-            if (!logFile.exists()) return emptyList()
-            logFile.readLines().mapNotNull { line ->
-                parseLogLine(line)
+            val allFiles = listOf(logFile) + (1..maxBackupIndex).map { i ->
+                File(context.filesDir, "app_logs.txt.$i")
+            }
+            allFiles.filter { it.exists() }.flatMap { file ->
+                file.readLines().mapNotNull { line -> parseLogLine(line) }
             }.sortedByDescending { it.timestamp }
         } catch (e: Exception) {
             emptyList()
@@ -144,6 +162,9 @@ class AppLogger private constructor(private val context: Context) {
         scope.launch {
             try {
                 logFile.delete()
+                for (i in 1..maxBackupIndex) {
+                    File(context.filesDir, "app_logs.txt.$i").delete()
+                }
             } catch (e: Exception) {
                 Log.e("AppLogger", "清空日志文件失败", e)
             }
