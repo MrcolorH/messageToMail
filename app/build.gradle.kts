@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.messagetomail"
         minSdk = 27  // 降低到Android 8.1以提高兼容性
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
