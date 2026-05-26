@@ -29,6 +29,8 @@ class SmsObserverService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
     private lateinit var repository: EmailConfigRepository
 
+    private val recentForwards = mutableListOf<Triple<String, String, Long>>()
+
     override fun onCreate() {
         super.onCreate()
         AppLogger.i("SmsObserver", "SmsObserverService onCreate")
@@ -46,6 +48,13 @@ class SmsObserverService : Service() {
                 "正在监听新短信..."
             )
             startForeground(FOREGROUND_SERVICE_ID, notification)
+        }
+
+        val smsSender = intent?.getStringExtra(EXTRA_SMS_SENDER)
+        val smsBody = intent?.getStringExtra(EXTRA_SMS_BODY)
+        if (smsSender != null && smsBody != null) {
+            AppLogger.i("SmsObserver", "收到广播传入的短信: sender=$smsSender")
+            forwardSms(smsSender, smsBody)
         }
 
         if (smsObserver == null) {
@@ -71,21 +80,124 @@ class SmsObserverService : Service() {
         }
     }
 
+    private fun isRecentlyForwarded(address: String, body: String): Boolean {
+        val now = System.currentTimeMillis()
+        val prefix = body.take(100)
+        recentForwards.removeAll { now - it.third > 10_000 }
+        return recentForwards.any { it.first == address && it.second == prefix }
+    }
+
+    private fun markForwarded(address: String, body: String) {
+        recentForwards.add(Triple(address, body.take(100), System.currentTimeMillis()))
+    }
+
+    private fun forwardSms(address: String, body: String) {
+        if (isRecentlyForwarded(address, body)) {
+            AppLogger.d("SmsObserver", "短信短期内已转发过，跳过去重: sender=$address")
+            return
+        }
+        markForwarded(address, body)
+
+        val filterConfig = repository.getSmsFilterConfigBlocking()
+        if (!SmsFilter.shouldForward(body, filterConfig)) {
+            AppLogger.i("SmsObserver", "短信被过滤规则拦截，跳过转发")
+            return
+        }
+
+        val formattedBody = SmsContentFormatter.format(body, address)
+        AppLogger.d("SmsObserver", "格式化后消息: ${formattedBody.take(200)}")
+
+        NotificationHelper.showNotification(
+            this@SmsObserverService,
+            "短信监听触发",
+            "发现新短信来自 $address",
+            address.hashCode()
+        )
+
+        val emailEnabled = repository.isEmailEnabledBlocking()
+        val wecomEnabled = repository.isWecomEnabledBlocking()
+        val wecomConfig = repository.getWecomConfigBlocking()
+        val feishuEnabled = repository.isFeishuEnabledBlocking()
+        val feishuConfig = repository.getFeishuConfigBlocking()
+        val feishuAppEnabled = repository.isFeishuAppEnabledBlocking()
+        val feishuAppConfig = repository.getFeishuAppConfigBlocking()
+
+        AppLogger.i("SmsObserver", "渠道配置: emailEnabled=$emailEnabled, wecomEnabled=$wecomEnabled, feishuEnabled=$feishuEnabled, feishuAppEnabled=$feishuAppEnabled")
+
+        if (emailEnabled) {
+            val emailIntent = Intent(this@SmsObserverService, EmailService::class.java).apply {
+                putExtra(EmailService.EXTRA_DEVICE_PHONE, "本机号码")
+                putExtra(EmailService.EXTRA_SENDER, address)
+                putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(emailIntent)
+            } else {
+                startService(emailIntent)
+            }
+            AppLogger.i("SmsObserver", "已启动 EmailService 发送邮件")
+        }
+
+        if (wecomEnabled && wecomConfig != null) {
+            serviceScope.launch {
+                val result = WecomRobotSender.send(
+                    wecomConfig.webhookUrl,
+                    "",
+                    formattedBody
+                )
+                result.onSuccess {
+                    AppLogger.i("SmsObserver", "企微机器人发送成功")
+                }.onFailure {
+                    AppLogger.e("SmsObserver", "企微机器人发送失败: ${it.message}")
+                }
+            }
+        }
+
+        if (feishuEnabled && feishuConfig != null) {
+            serviceScope.launch {
+                val result = FeishuRobotSender.send(
+                    feishuConfig.webhookUrl,
+                    feishuConfig.secret,
+                    "",
+                    formattedBody
+                )
+                result.onSuccess {
+                    AppLogger.i("SmsObserver", "飞书机器人发送成功")
+                }.onFailure {
+                    AppLogger.e("SmsObserver", "飞书机器人发送失败: ${it.message}")
+                }
+            }
+        }
+
+        if (feishuAppEnabled && feishuAppConfig != null) {
+            serviceScope.launch {
+                val result = FeishuAppRobotSender.sendToMultiple(
+                    feishuAppConfig.appId,
+                    feishuAppConfig.appSecret,
+                    feishuAppConfig.receivers,
+                    "",
+                    formattedBody
+                )
+                result.onSuccess {
+                    AppLogger.i("SmsObserver", "飞书应用机器人发送成功")
+                }.onFailure {
+                    AppLogger.e("SmsObserver", "飞书应用机器人发送失败: ${it.message}")
+                }
+            }
+        }
+    }
+
     private inner class SmsContentObserver(val handler: Handler) : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean, uri: Uri?) {
             super.onChange(selfChange, uri)
             AppLogger.i("SmsObserver", "短信数据库发生变化, uri=$uri")
 
-            // MIUI 收到验证码时，onChange 可能先于数据库写入完成触发
-            // 延迟 300ms 再查询，同时优先使用具体 URI，并放宽查询条件
             handler.postDelayed({
                 queryAndProcess(uri)
             }, 300)
         }
 
         private fun queryAndProcess(specificUri: Uri?) {
-            // 优先使用 onChange 传进来的具体 URI（如 content://sms/6652）
-            // 如果 specificUri 无效，再回退到通用的 Telephony.Sms.CONTENT_URI
             val queryUri = if (specificUri != null && specificUri != Telephony.Sms.CONTENT_URI) {
                 specificUri
             } else {
@@ -101,8 +213,6 @@ class SmsObserverService : Service() {
                 Telephony.Sms.READ
             )
 
-            // 先尝试不加任何 WHERE 条件，直接按时间倒序取最近一条
-            // MIUI 的验证码可能被归类到非 TYPE=1，或被自动标记已读
             val cursor = contentResolver.query(
                 queryUri,
                 projection,
@@ -123,10 +233,7 @@ class SmsObserverService : Service() {
                     val address = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)) ?: "未知号码"
                     val body = it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)) ?: ""
                     val date = it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE))
-                    val type = it.getInt(it.getColumnIndexOrThrow(Telephony.Sms.TYPE))
-                    val read = it.getInt(it.getColumnIndexOrThrow(Telephony.Sms.READ))
 
-                    // 过滤：只处理最近 60 秒内的短信，防止误发旧短信
                     val sixtySecondsAgo = System.currentTimeMillis() - 60_000
                     if (date < sixtySecondsAgo) {
                         AppLogger.d("SmsObserver", "短信时间太久远 (${date}), 忽略")
@@ -135,97 +242,9 @@ class SmsObserverService : Service() {
 
                     lastProcessedId = id
 
-                    AppLogger.i("SmsObserver", "检测到新短信: id=$id, sender=$address, type=$type, read=$read, bodyLength=${body.length}, date=$date")
+                    AppLogger.i("SmsObserver", "检测到新短信: id=$id, sender=$address, bodyLength=${body.length}, date=$date")
 
-                    // 读取过滤配置并判断是否转发
-                    val filterConfig = repository.getSmsFilterConfigBlocking()
-                    if (!SmsFilter.shouldForward(body, filterConfig)) {
-                        AppLogger.i("SmsObserver", "短信被过滤规则拦截，跳过转发")
-                        return
-                    }
-
-                    // 格式化消息内容
-                    val formattedBody = SmsContentFormatter.format(body, address)
-                    AppLogger.d("SmsObserver", "格式化后消息: ${formattedBody.take(200)}")
-
-                    NotificationHelper.showNotification(
-                        this@SmsObserverService,
-                        "短信监听触发",
-                        "发现新短信来自 $address",
-                        id.toInt()
-                    )
-
-                    val emailEnabled = repository.isEmailEnabledBlocking()
-                    val wecomEnabled = repository.isWecomEnabledBlocking()
-                    val wecomConfig = repository.getWecomConfigBlocking()
-                    val feishuEnabled = repository.isFeishuEnabledBlocking()
-                    val feishuConfig = repository.getFeishuConfigBlocking()
-                    val feishuAppEnabled = repository.isFeishuAppEnabledBlocking()
-                    val feishuAppConfig = repository.getFeishuAppConfigBlocking()
-
-                    AppLogger.i("SmsObserver", "渠道配置: emailEnabled=$emailEnabled, wecomEnabled=$wecomEnabled, feishuEnabled=$feishuEnabled, feishuAppEnabled=$feishuAppEnabled")
-
-                    if (emailEnabled) {
-                        val emailIntent = Intent(this@SmsObserverService, EmailService::class.java).apply {
-                            putExtra(EmailService.EXTRA_DEVICE_PHONE, "本机号码")
-                            putExtra(EmailService.EXTRA_SENDER, address)
-                            putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(emailIntent)
-                        } else {
-                            startService(emailIntent)
-                        }
-                        AppLogger.i("SmsObserver", "已启动 EmailService 发送邮件")
-                    }
-
-                    if (wecomEnabled && wecomConfig != null) {
-                        serviceScope.launch {
-                            val result = WecomRobotSender.send(
-                                wecomConfig.webhookUrl,
-                                "",
-                                formattedBody
-                            )
-                            result.onSuccess {
-                                AppLogger.i("SmsObserver", "企微机器人发送成功")
-                            }.onFailure {
-                                AppLogger.e("SmsObserver", "企微机器人发送失败: ${it.message}")
-                            }
-                        }
-                    }
-
-                    if (feishuEnabled && feishuConfig != null) {
-                        serviceScope.launch {
-                            val result = FeishuRobotSender.send(
-                                feishuConfig.webhookUrl,
-                                feishuConfig.secret,
-                                "",
-                                formattedBody
-                            )
-                            result.onSuccess {
-                                AppLogger.i("SmsObserver", "飞书机器人发送成功")
-                            }.onFailure {
-                                AppLogger.e("SmsObserver", "飞书机器人发送失败: ${it.message}")
-                            }
-                        }
-                    }
-
-                    if (feishuAppEnabled && feishuAppConfig != null) {
-                        serviceScope.launch {
-                            val result = FeishuAppRobotSender.sendToMultiple(
-                                feishuAppConfig.appId,
-                                feishuAppConfig.appSecret,
-                                feishuAppConfig.receivers,
-                                "",
-                                formattedBody
-                            )
-                            result.onSuccess {
-                                AppLogger.i("SmsObserver", "飞书应用机器人发送成功")
-                            }.onFailure {
-                                AppLogger.e("SmsObserver", "飞书应用机器人发送失败: ${it.message}")
-                            }
-                        }
-                    }
+                    forwardSms(address, body)
                 } else {
                     AppLogger.d("SmsObserver", "cursor moveToFirst 失败，queryUri=$queryUri")
                 }
@@ -237,6 +256,8 @@ class SmsObserverService : Service() {
 
     companion object {
         private const val FOREGROUND_SERVICE_ID = 1002
+        const val EXTRA_SMS_SENDER = "sms_sender"
+        const val EXTRA_SMS_BODY = "sms_body"
 
         fun createIntent(context: android.content.Context): Intent {
             return Intent(context, SmsObserverService::class.java)
