@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="#F5F5F5">
+    android:background="?android:attr/colorBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -30,7 +30,7 @@
                     android:text="转发规则"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:textColor="@color/purple_500" />
+                    android:textColor="?attr/colorPrimary" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -38,7 +38,7 @@
                     android:layout_marginTop="8dp"
                     android:text="选择需要转发的短信类型"
                     android:textSize="12sp"
-                    android:textColor="@android:color/darker_gray" />
+                    android:textColor="?android:attr/textColorSecondary" />
 
                 <RadioGroup
                     android:id="@+id/rgFilterMode"
@@ -98,7 +98,7 @@
                     android:layout_marginTop="4dp"
                     android:text="最多 10 条，短信正文匹配任意一条即转发"
                     android:textSize="12sp"
-                    android:textColor="@android:color/darker_gray" />
+                    android:textColor="?android:attr/textColorSecondary" />
 
                 <TextView
                     android:id="@+id/tvRuleCount"
@@ -152,7 +152,7 @@
                     android:layout_marginTop="4dp"
                     android:text="输入短信内容和发件人，实时验证当前规则"
                     android:textSize="12sp"
-                    android:textColor="@android:color/darker_gray" />
+                    android:textColor="?android:attr/textColorSecondary" />
 
                 <EditText
                     android:id="@+id/etTestSender"

@@ -15,7 +15,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="11sp"
-            android:textColor="@android:color/darker_gray" />
+            android:textColor="?android:attr/textColorSecondary" />
 
         <TextView
             android:id="@+id/tvLogLevel"

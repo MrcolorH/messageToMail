@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="#F5F5F5">
+    android:background="?android:attr/colorBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -17,10 +17,10 @@
             android:id="@+id/tvServiceRunningBanner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FFF3CD"
+            android:background="?attr/colorErrorContainer"
             android:padding="12dp"
             android:text="⚠️ 服务运行中，请先关闭服务才能修改配置"
-            android:textColor="#856404"
+            android:textColor="?attr/colorOnErrorContainer"
             android:visibility="gone" />
 
         <!-- SIM 卡监听配置 -->
@@ -51,7 +51,7 @@
                     android:layout_marginTop="4dp"
                     android:text="检测中..."
                     android:textSize="12sp"
-                    android:textColor="@android:color/darker_gray" />
+                    android:textColor="?android:attr/textColorSecondary" />
 
                 <LinearLayout
                     android:id="@+id/containerSimCards"
@@ -66,7 +66,7 @@
                     android:layout_marginTop="8dp"
                     android:text="提示：未选择时默认监听所有SIM卡"
                     android:textSize="12sp"
-                    android:textColor="@android:color/darker_gray" />
+                    android:textColor="?android:attr/textColorSecondary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -119,7 +119,7 @@
                         android:layout_height="24dp"
                         android:layout_marginStart="8dp"
                         android:src="@drawable/ic_arrow_down"
-                        app:tint="@android:color/darker_gray" />
+                        app:tint="?android:attr/textColorSecondary" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -138,7 +138,7 @@
                         android:text="发件人配置"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="@color/purple_500" />
+                        android:textColor="?attr/colorPrimary" />
 
                     <!-- 邮箱类型 -->
                     <TextView
@@ -210,7 +210,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
                         android:text="提示：QQ邮箱需要使用授权码而非登录密码"
-                        android:textColor="@android:color/holo_orange_dark"
+                        android:textColor="?attr/colorError"
                         android:textSize="12sp" />
 
                     <!-- SMTP服务器 -->
@@ -304,7 +304,7 @@
                         android:text="收件人配置"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="@color/purple_500" />
+                        android:textColor="?attr/colorPrimary" />
 
                     <TextView
                         android:id="@+id/tvReceiverCount"
@@ -369,7 +369,7 @@
                         android:layout_gravity="center"
                         android:layout_marginTop="8dp"
                         android:text="提示：最多支持10个收件邮箱"
-                        android:textColor="@android:color/darker_gray"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
@@ -423,7 +423,7 @@
                         android:layout_height="24dp"
                         android:layout_marginStart="8dp"
                         android:src="@drawable/ic_arrow_down"
-                        app:tint="@android:color/darker_gray" />
+                        app:tint="?android:attr/textColorSecondary" />
                 </LinearLayout>
 
                 <!-- Content -->
@@ -540,7 +540,7 @@
                         android:layout_height="24dp"
                         android:layout_marginStart="8dp"
                         android:src="@drawable/ic_arrow_down"
-                        app:tint="@android:color/darker_gray" />
+                        app:tint="?android:attr/textColorSecondary" />
                 </LinearLayout>
 
                 <!-- Content -->
@@ -673,7 +673,7 @@
                         android:layout_height="24dp"
                         android:layout_marginStart="8dp"
                         android:src="@drawable/ic_arrow_down"
-                        app:tint="@android:color/darker_gray" />
+                        app:tint="?android:attr/textColorSecondary" />
                 </LinearLayout>
 
                 <!-- Content -->
