@@ -22,6 +22,8 @@ import androidx.core.app.ActivityCompat
 import com.example.messagetomail.Utils.NotificationHelper
 import com.example.messagetomail.database.AppDatabase
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.net.Uri
 import androidx.appcompat.app.AlertDialog
 import java.util.Calendar
@@ -39,6 +41,14 @@ class MainActivity : AppCompatActivity() {
     private var wecomEnabled = false
     private var feishuEnabled = false
     private var feishuAppEnabled = false
+
+    private val forwardReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action == SmsObserverService.ACTION_FORWARD_COMPLETED) {
+                refreshStats()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -178,6 +188,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStats()
+        registerReceiver(forwardReceiver, IntentFilter(SmsObserverService.ACTION_FORWARD_COMPLETED))
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(forwardReceiver)
     }
 
 

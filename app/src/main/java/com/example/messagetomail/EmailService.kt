@@ -125,6 +125,7 @@ class EmailService : Service() {
                         errorReason = errorReason
                     )
                 )
+                sendBroadcast(Intent(SmsObserverService.ACTION_FORWARD_COMPLETED))
             } catch (e: Exception) {
                 AppLogger.e("EmailService", "记录转发历史失败", e)
             }

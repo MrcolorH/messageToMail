@@ -218,6 +218,7 @@ class SmsObserverService : Service() {
                         errorReason = errorReason
                     )
                 )
+                sendBroadcast(Intent(ACTION_FORWARD_COMPLETED))
             } catch (e: Exception) {
                 AppLogger.e("SmsObserver", "记录转发历史失败", e)
             }
@@ -313,6 +314,7 @@ class SmsObserverService : Service() {
         private const val FOREGROUND_SERVICE_ID = 1002
         const val EXTRA_SMS_SENDER = "sms_sender"
         const val EXTRA_SMS_BODY = "sms_body"
+        const val ACTION_FORWARD_COMPLETED = "com.example.messagetomail.FORWARD_COMPLETED"
 
         fun createIntent(context: android.content.Context): Intent {
             return Intent(context, SmsObserverService::class.java)
