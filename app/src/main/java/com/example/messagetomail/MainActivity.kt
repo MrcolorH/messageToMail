@@ -24,8 +24,9 @@ import com.example.messagetomail.database.AppDatabase
 import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
-import android.net.Uri
+import android.content.SharedPreferences
 import androidx.appcompat.app.AlertDialog
+import dev.doubledot.doki.ui.DokiActivity
 import java.util.Calendar
 
 
@@ -64,9 +65,6 @@ class MainActivity : AppCompatActivity() {
         // 初始化通知渠道（Android 8.0+需要）
         NotificationHelper.createNotificationChannel(this)
         AppLogger.d("MainActivity", "通知渠道初始化完成")
-
-        // 检查是否为vivo系统并提示设置
-        checkVivoSystemSettings()
 
         // 请求权限
         requestSmsPermissions()
@@ -139,6 +137,7 @@ class MainActivity : AppCompatActivity() {
                     viewModel.setContent(buildActiveChannelsText())
                     btnSettings.isEnabled = false
                     AppLogger.i("MainActivity", "服务已开启，短信监听服务已启动")
+                    showKeepaliveGuideOnce()
                     refreshStats()
                 } else {
                     Toast.makeText(this,"权限不足",Toast.LENGTH_SHORT).show()
@@ -349,56 +348,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 检查vivo系统并提示用户进行必要设置
+     * 首次开启服务时，引导用户进行后台保活设置（仅提示一次）
      */
-    private fun checkVivoSystemSettings() {
-        val manufacturer = Build.MANUFACTURER.lowercase()
-        val brand = Build.BRAND.lowercase()
+    private fun showKeepaliveGuideOnce() {
+        val prefs = getSharedPreferences("keepalive_prefs", MODE_PRIVATE)
+        if (prefs.getBoolean("has_shown_guide", false)) return
 
-        AppLogger.i("VivoSystem", "设备信息: manufacturer=$manufacturer, brand=$brand, model=${Build.MODEL}")
-        if (manufacturer.contains("vivo") || brand.contains("vivo")) {
-            AppLogger.i("VivoSystem", "检测到vivo系统，显示设置引导")
-            showVivoSettingsDialog()
-        }
-    }
-
-    /**
-     * 显示vivo系统设置引导对话框
-     */
-    private fun showVivoSettingsDialog() {
         AlertDialog.Builder(this)
-            .setTitle("vivo系统设置提醒")
-            .setMessage("为确保短信转邮件功能正常工作，请进行以下设置：\n\n" +
-                    "1. 开启自启动管理权限\n" +
-                    "2. 允许后台高耗电\n" +
-                    "3. 关闭省电模式限制\n" +
-                    "4. 将应用加入白名单\n\n" +
-                    "是否现在前往设置？")
-            .setPositiveButton("前往设置") { _, _ ->
-                try {
-                    // 尝试打开vivo的自启动管理页面
-                    val intent = Intent().apply {
-                        component = android.content.ComponentName(
-                            "com.vivo.permissionmanager",
-                            "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
-                        )
-                        putExtra("packagename", packageName)
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    // 如果无法打开特定页面，打开应用设置页面
-                    try {
-                        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.parse("package:$packageName")
-                        startActivity(intent)
-                    } catch (ex: Exception) {
-                        Toast.makeText(this, "请手动前往设置-应用管理中配置权限", Toast.LENGTH_LONG).show()
-                    }
-                }
+            .setTitle("后台保活设置建议")
+            .setMessage("为确保短信转发服务稳定运行，建议进行后台保活设置。\n\n将根据您的手机品牌自动显示对应的设置指引。")
+            .setPositiveButton("查看设置指引") { _, _ ->
+                prefs.edit().putBoolean("has_shown_guide", true).apply()
+                DokiActivity.start(this)
             }
-            .setNegativeButton("稍后设置") { dialog, _ ->
+            .setNegativeButton("不再提示") { dialog, _ ->
+                prefs.edit().putBoolean("has_shown_guide", true).apply()
                 dialog.dismiss()
-                Toast.makeText(this, "请记得在设置中开启相关权限", Toast.LENGTH_LONG).show()
             }
             .setCancelable(false)
             .show()
