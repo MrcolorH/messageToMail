@@ -25,8 +25,7 @@ import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import androidx.appcompat.app.AlertDialog
-import dev.doubledot.doki.ui.DokiActivity
+import com.example.messagetomail.Utils.KeepAliveHelper
 import java.util.Calendar
 
 
@@ -354,19 +353,9 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("keepalive_prefs", MODE_PRIVATE)
         if (prefs.getBoolean("has_shown_guide", false)) return
 
-        AlertDialog.Builder(this)
-            .setTitle("后台保活设置建议")
-            .setMessage("为确保短信转发服务稳定运行，建议进行后台保活设置。\n\n将根据您的手机品牌自动显示对应的设置指引。")
-            .setPositiveButton("查看设置指引") { _, _ ->
-                prefs.edit().putBoolean("has_shown_guide", true).apply()
-                DokiActivity.start(this)
-            }
-            .setNegativeButton("不再提示") { dialog, _ ->
-                prefs.edit().putBoolean("has_shown_guide", true).apply()
-                dialog.dismiss()
-            }
-            .setCancelable(false)
-            .show()
+        KeepAliveHelper.showGuideDialog(this) {
+            prefs.edit().putBoolean("has_shown_guide", true).apply()
+        }
     }
 
 }

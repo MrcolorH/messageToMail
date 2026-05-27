@@ -94,7 +94,4 @@ dependencies {
     kapt("androidx.room:room-compiler:$roomVersion")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // 后台保活引导库（Doki - dontkillmyapp.com）
-    implementation("dev.doubledot.doki:library:0.0.1@aar") { isTransitive = true }
 }
