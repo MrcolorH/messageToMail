@@ -45,19 +45,28 @@ class SmsObserverService : Service() {
         AppLogger.i("SmsObserver", "SmsObserverService onStartCommand")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notification = NotificationHelper.createForegroundNotification(
-                this,
-                "短信监听服务",
-                "正在监听新短信..."
-            )
-            startForeground(FOREGROUND_SERVICE_ID, notification)
+            try {
+                val notification = NotificationHelper.createForegroundNotification(
+                    this,
+                    "短信监听服务",
+                    "正在监听新短信..."
+                )
+                startForeground(FOREGROUND_SERVICE_ID, notification)
+            } catch (e: Exception) {
+                // 荣耀/华为等厂商在后台限制严格时，startForeground 可能抛异常
+                AppLogger.e("SmsObserver", "启动短信监听前台服务失败", e)
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
 
-        val smsSender = intent?.getStringExtra(EXTRA_SMS_SENDER)
-        val smsBody = intent?.getStringExtra(EXTRA_SMS_BODY)
-        if (smsSender != null && smsBody != null) {
-            AppLogger.i("SmsObserver", "收到广播传入的短信: sender=$smsSender")
-            forwardSms(smsSender, smsBody)
+        serviceScope.launch {
+            val smsSender = intent?.getStringExtra(EXTRA_SMS_SENDER)
+            val smsBody = intent?.getStringExtra(EXTRA_SMS_BODY)
+            if (smsSender != null && smsBody != null) {
+                AppLogger.i("SmsObserver", "收到广播传入的短信: sender=$smsSender")
+                forwardSms(smsSender, smsBody)
+            }
         }
 
         if (smsObserver == null) {
@@ -304,7 +313,9 @@ class SmsObserverService : Service() {
                         "${info.displayName} [卡槽${info.slotIndex + 1}]$numberPart"
                     }
 
-                    forwardSms(address, body, simLabel)
+                    serviceScope.launch {
+                        forwardSms(address, body, simLabel)
+                    }
                 } else {
                     AppLogger.d("SmsObserver", "cursor moveToFirst 失败，queryUri=$queryUri")
                 }

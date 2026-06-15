@@ -41,8 +41,14 @@ class EmailService : Service() {
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForeground(FOREGROUND_SERVICE_ID, notification)
-            AppLogger.d("EmailService", "前台服务已启动")
+            try {
+                startForeground(FOREGROUND_SERVICE_ID, notification)
+                AppLogger.d("EmailService", "前台服务已启动")
+            } catch (e: Exception) {
+                AppLogger.e("EmailService", "启动邮件前台服务失败", e)
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
 
         val devicePhone = intent?.getStringExtra(EXTRA_DEVICE_PHONE)

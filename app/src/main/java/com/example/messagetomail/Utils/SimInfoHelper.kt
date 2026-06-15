@@ -19,16 +19,22 @@ object SimInfoHelper {
                 as? SubscriptionManager ?: return emptyList()
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            subscriptionManager.activeSubscriptionInfoList?.map { info ->
-                SimInfo(
-                    subscriptionId = info.subscriptionId,
-                    slotIndex = info.simSlotIndex,
-                    displayName = info.carrierName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
-                    number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        info.number?.toString()
-                    } else null
-                )
-            } ?: emptyList()
+            try {
+                subscriptionManager.activeSubscriptionInfoList?.map { info ->
+                    SimInfo(
+                        subscriptionId = info.subscriptionId,
+                        slotIndex = info.simSlotIndex,
+                        displayName = info.carrierName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
+                        number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            info.number?.toString()
+                        } else null
+                    )
+                } ?: emptyList()
+            } catch (e: SecurityException) {
+                // 部分荣耀/华为机型即使申请了 READ_PHONE_STATE，后台查询 SIM 信息仍会抛异常
+                AppLogger.e("SimInfoHelper", "读取 SIM 信息被系统拒绝", e)
+                emptyList()
+            }
         } else {
             emptyList()
         }
