@@ -23,6 +23,7 @@ import com.example.messagetomail.Utils.NotificationHelper
 import com.example.messagetomail.database.AppDatabase
 import android.content.Intent
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import com.example.messagetomail.Utils.KeepAliveHelper
@@ -186,7 +187,11 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStats()
-        registerReceiver(forwardReceiver, IntentFilter(SmsObserverService.ACTION_FORWARD_COMPLETED))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerReceiver(forwardReceiver, IntentFilter(SmsObserverService.ACTION_FORWARD_COMPLETED), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(forwardReceiver, IntentFilter(SmsObserverService.ACTION_FORWARD_COMPLETED))
+        }
     }
 
     override fun onPause() {

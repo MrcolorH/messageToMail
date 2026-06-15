@@ -1,5 +1,6 @@
 package com.example.messagetomail
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -46,15 +47,21 @@ class SmsReceiver : BroadcastReceiver() {
             AppLogger.i("SmsReceiver", "短信解析完成: sender=$sender, bodyLength=${messageBody.length}")
             AppLogger.i("SmsReceiver", "将短信数据交给 SmsObserverService 统一处理")
 
-            context?.let {
-                val serviceIntent = SmsObserverService.createIntent(it).apply {
+            context?.let { ctx ->
+                val serviceIntent = SmsObserverService.createIntent(ctx).apply {
                     putExtra(SmsObserverService.EXTRA_SMS_SENDER, sender)
                     putExtra(SmsObserverService.EXTRA_SMS_BODY, messageBody)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    it.startForegroundService(serviceIntent)
-                } else {
-                    it.startService(serviceIntent)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        ctx.startForegroundService(serviceIntent)
+                    } else {
+                        ctx.startService(serviceIntent)
+                    }
+                } catch (e: ForegroundServiceStartNotAllowedException) {
+                    AppLogger.e("SmsReceiver", "无法从后台启动前台服务(Android 12+限制)", e)
+                } catch (e: Exception) {
+                    AppLogger.e("SmsReceiver", "启动短信处理服务异常", e)
                 }
             }
         }

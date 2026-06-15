@@ -17,16 +17,21 @@ object NotificationHelper {
      * 创建通知渠道（Android 8.0+需要）
      */
     fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-                description = CHANNEL_DESCRIPTION
-                enableLights(true)
-                enableVibration(false)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val importance = NotificationManager.IMPORTANCE_DEFAULT
+                val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+                    description = CHANNEL_DESCRIPTION
+                    enableLights(false)
+                    enableVibration(false)
+                }
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.createNotificationChannel(channel)
             }
-            
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        } catch (e: SecurityException) {
+            android.util.Log.w("NotificationHelper", "通知渠道创建失败(权限不足)", e)
+        } catch (e: Exception) {
+            android.util.Log.w("NotificationHelper", "通知渠道创建异常", e)
         }
     }
     

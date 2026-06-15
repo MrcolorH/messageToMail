@@ -134,12 +134,16 @@ class SmsObserverService : Service() {
                 putExtra(EmailService.EXTRA_MESSAGE_BODY, formattedBody)
                 putExtra(EmailService.EXTRA_SIM_LABEL, simLabel)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(emailIntent)
-            } else {
-                startService(emailIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(emailIntent)
+                } else {
+                    startService(emailIntent)
+                }
+                AppLogger.i("SmsObserver", "已启动 EmailService 发送邮件")
+            } catch (e: Exception) {
+                AppLogger.e("SmsObserver", "启动 EmailService 失败", e)
             }
-            AppLogger.i("SmsObserver", "已启动 EmailService 发送邮件")
         }
 
         if (wecomEnabled && wecomConfig != null) {
