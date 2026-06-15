@@ -126,10 +126,7 @@ class SettingsActivity : AppCompatActivity() {
     private var currentFeishuApp: FeishuAppRobotConfig? = null
     private var serviceRunning = false
 
-    private var emailExpandedSet = false
-    private var wecomExpandedSet = false
-    private var feishuExpandedSet = false
-    private var feishuAppExpandedSet = false
+    private var syncingFromStore = false
 
     private val feishuIdPickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -382,14 +379,18 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         cbEmailEnabled.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingFromStore) return@setOnCheckedChangeListener
             AppLogger.i("Settings", "邮件通知开关: $isChecked")
+            setCardExpanded(contentEmail, arrowEmail, isChecked)
             lifecycleScope.launch {
                 repository.setEmailEnabled(isChecked)
             }
         }
 
         cbWecomEnabled.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingFromStore) return@setOnCheckedChangeListener
             AppLogger.i("Settings", "企微通知开关: $isChecked")
+            setCardExpanded(contentWecom, arrowWecom, isChecked)
             lifecycleScope.launch {
                 repository.setWecomEnabled(isChecked)
             }
@@ -435,7 +436,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         cbFeishuEnabled.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingFromStore) return@setOnCheckedChangeListener
             AppLogger.i("Settings", "飞书通知开关: $isChecked")
+            setCardExpanded(contentFeishu, arrowFeishu, isChecked)
             lifecycleScope.launch {
                 repository.setFeishuEnabled(isChecked)
             }
@@ -482,7 +485,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         cbFeishuAppEnabled.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingFromStore) return@setOnCheckedChangeListener
             AppLogger.i("Settings", "飞书应用机器人通知开关: $isChecked")
+            setCardExpanded(contentFeishuApp, arrowFeishuApp, isChecked)
             lifecycleScope.launch {
                 repository.setFeishuAppEnabled(isChecked)
             }
@@ -732,20 +737,18 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 launch {
                     repository.emailEnabledFlow.collect { enabled ->
+                        syncingFromStore = true
                         cbEmailEnabled.isChecked = enabled
-                        if (!emailExpandedSet) {
-                            emailExpandedSet = true
-                            setCardExpanded(contentEmail, arrowEmail, enabled)
-                        }
+                        setCardExpanded(contentEmail, arrowEmail, enabled)
+                        syncingFromStore = false
                     }
                 }
                 launch {
                     repository.wecomEnabledFlow.collect { enabled ->
+                        syncingFromStore = true
                         cbWecomEnabled.isChecked = enabled
-                        if (!wecomExpandedSet) {
-                            wecomExpandedSet = true
-                            setCardExpanded(contentWecom, arrowWecom, enabled)
-                        }
+                        setCardExpanded(contentWecom, arrowWecom, enabled)
+                        syncingFromStore = false
                     }
                 }
                 launch {
@@ -756,11 +759,10 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 launch {
                     repository.feishuEnabledFlow.collect { enabled ->
+                        syncingFromStore = true
                         cbFeishuEnabled.isChecked = enabled
-                        if (!feishuExpandedSet) {
-                            feishuExpandedSet = true
-                            setCardExpanded(contentFeishu, arrowFeishu, enabled)
-                        }
+                        setCardExpanded(contentFeishu, arrowFeishu, enabled)
+                        syncingFromStore = false
                     }
                 }
                 launch {
@@ -771,11 +773,10 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 launch {
                     repository.feishuAppEnabledFlow.collect { enabled ->
+                        syncingFromStore = true
                         cbFeishuAppEnabled.isChecked = enabled
-                        if (!feishuAppExpandedSet) {
-                            feishuAppExpandedSet = true
-                            setCardExpanded(contentFeishuApp, arrowFeishuApp, enabled)
-                        }
+                        setCardExpanded(contentFeishuApp, arrowFeishuApp, enabled)
+                        syncingFromStore = false
                     }
                 }
                 launch {

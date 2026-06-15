@@ -114,10 +114,10 @@ class MainActivity : AppCompatActivity() {
         toggleButton.setOnClickListener {
             if (!isServiceRunning) {
                 AppLogger.i("MainActivity", "用户点击开启服务")
-                // 开启服务前检查配置
-                if (!configValid) {
-                    AppLogger.w("MainActivity", "配置未验证，阻止开启服务")
-                    Toast.makeText(this, "请先完成服务配置", Toast.LENGTH_SHORT).show()
+                // 检查是否至少开启了一个转发渠道（不再仅依赖邮件 SMTP 验证标志）
+                if (!emailEnabled && !wecomEnabled && !feishuEnabled && !feishuAppEnabled) {
+                    AppLogger.w("MainActivity", "未开启任何转发渠道，阻止开启服务")
+                    Toast.makeText(this, "请至少开启一个转发渠道", Toast.LENGTH_SHORT).show()
                     startActivity(SettingsActivity.createIntent(this, false))
                     return@setOnClickListener
                 }
