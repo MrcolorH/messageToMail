@@ -40,7 +40,20 @@ class EmailService : Service() {
             "正在发送邮件..."
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                startForeground(
+                    FOREGROUND_SERVICE_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+                AppLogger.d("EmailService", "前台服务已启动 (type=dataSync)")
+            } catch (e: Exception) {
+                AppLogger.e("EmailService", "启动邮件前台服务失败", e)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 startForeground(FOREGROUND_SERVICE_ID, notification)
                 AppLogger.d("EmailService", "前台服务已启动")

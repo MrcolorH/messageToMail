@@ -44,13 +44,25 @@ class SmsObserverService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         AppLogger.i("SmsObserver", "SmsObserverService onStartCommand")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val notification = NotificationHelper.createForegroundNotification(
+            this,
+            "短信监听服务",
+            "正在监听新短信..."
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                val notification = NotificationHelper.createForegroundNotification(
-                    this,
-                    "短信监听服务",
-                    "正在监听新短信..."
+                startForeground(
+                    FOREGROUND_SERVICE_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
                 )
+            } catch (e: Exception) {
+                AppLogger.e("SmsObserver", "启动短信监听前台服务失败 (type=dataSync)", e)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
                 startForeground(FOREGROUND_SERVICE_ID, notification)
             } catch (e: Exception) {
                 // 荣耀/华为等厂商在后台限制严格时，startForeground 可能抛异常

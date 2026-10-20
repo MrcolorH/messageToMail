@@ -44,27 +44,46 @@ object KeepAliveHelper {
         val manufacturer = Build.MANUFACTURER.lowercase()
         val brand = Build.BRAND.lowercase()
         val intent = when {
+            // 小米 / 红米 (MIUI / HyperOS)
             manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || brand.contains("xiaomi") || brand.contains("redmi") -> {
                 tryLaunch(
                     ctx,
                     ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
-                    null
+                    ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
                 )
             }
-            manufacturer.contains("huawei") || manufacturer.contains("honor") || brand.contains("huawei") || brand.contains("honor") -> {
+            // 华为 / 老荣耀 (EMUI) 与 新荣耀 (MagicOS)
+            manufacturer.contains("honor") || brand.contains("honor") -> {
                 tryLaunch(
                     ctx,
-                    ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"),
+                    ComponentName("com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
                     ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")
+                ) ?: tryLaunch(
+                    ctx,
+                    ComponentName("com.hihonor.systemmanager", "com.hihonor.systemmanager.optimize.process.ProtectActivity"),
+                    ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
                 )
             }
-            manufacturer.contains("oppo") || brand.contains("oppo") -> {
+            manufacturer.contains("huawei") || brand.contains("huawei") -> {
+                tryLaunch(
+                    ctx,
+                    ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+                    ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
+                )
+            }
+            // OPPO / 一加 / Realme (ColorOS)
+            manufacturer.contains("oppo") || brand.contains("oppo") || manufacturer.contains("realme") || brand.contains("realme") -> {
                 tryLaunch(
                     ctx,
                     ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"),
-                    ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")
+                    ComponentName("com.oplus.battery", "com.oplus.battery.PowerConsumptionOptimizationActivity")
+                ) ?: tryLaunch(
+                    ctx,
+                    ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"),
+                    null
                 )
             }
+            // vivo / iQOO (OriginOS / FuntouchOS)
             manufacturer.contains("vivo") || brand.contains("vivo") || manufacturer.contains("iqoo") || brand.contains("iqoo") -> {
                 val vivoIntent = Intent().apply {
                     component = ComponentName(
@@ -74,8 +93,17 @@ object KeepAliveHelper {
                     putExtra("packagename", ctx.packageName)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-                vivoIntent
+                if (ctx.packageManager.resolveActivity(vivoIntent, 0) != null) {
+                    vivoIntent
+                } else {
+                    tryLaunch(
+                        ctx,
+                        ComponentName("com.iqoo.secure", "com.iqoo.secure.safeguard.PurviewTabActivity"),
+                        null
+                    )
+                }
             }
+            // 三星 (OneUI)
             manufacturer.contains("samsung") || brand.contains("samsung") -> {
                 tryLaunch(
                     ctx,
@@ -83,6 +111,7 @@ object KeepAliveHelper {
                     ComponentName("com.samsung.android.sm_cn", "com.samsung.android.sm.ui.battery.AppSleepListActivity")
                 )
             }
+            // 一加 (原生/早期系统)
             manufacturer.contains("oneplus") || brand.contains("oneplus") -> {
                 tryLaunch(
                     ctx,
@@ -90,6 +119,7 @@ object KeepAliveHelper {
                     null
                 )
             }
+            // 魅族 (Flyme)
             manufacturer.contains("meizu") || brand.contains("meizu") -> {
                 tryLaunch(
                     ctx,
@@ -137,6 +167,17 @@ object KeepAliveHelper {
     }
 
     private fun openBatteryOptimization(activity: Activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${activity.packageName}")
+                }
+                activity.startActivity(intent)
+                return
+            } catch (e: Exception) {
+                // 部分定制ROM可能禁用此Action，回退到设置列表
+            }
+        }
         try {
             val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             activity.startActivity(intent)

@@ -10,29 +10,55 @@ android {
 
     defaultConfig {
         applicationId = "com.example.messagetomail"
-        minSdk = 27  // 降低到Android 8.1以提高兼容性
+        minSdk = 21
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
-        // vivo系统兼容性配置
+        // 兼容性配置
         multiDexEnabled = true
         vectorDrawables.useSupportLibrary = true
+    }
+
+    flavorDimensions += "version"
+    productFlavors {
+        create("legacy") {
+            dimension = "version"
+            minSdk = 21  // 兼容 Android 5.0+ 超级久远老机型（老荣耀、老华为等）
+            versionNameSuffix = "-legacy"
+        }
+        create("modern") {
+            dimension = "version"
+            minSdk = 26  // 针对 Android 8.0 ~ 15，小米10、小米14、现代主流机型
+            versionNameSuffix = "-modern"
+        }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            if (output != null) {
+                val bType = buildType.name
+                val vName = versionName
+                output.outputFileName = "MessageToMail-v${vName}-${bType}.apk"
+            }
+        }
     }
 
     packaging {
         resources.excludes.add("META-INF/LICENSE.md")
         resources.excludes.add("META-INF/NOTICE.md")
-
     }
+
     dataBinding {
         enable = true
     }
+
     signingConfigs {
         create("release") {
-            // 使用调试签名以避免签名问题
+            // 使用调试签名以避免签名问题，方便即装即用
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
@@ -56,10 +82,12 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
@@ -75,7 +103,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
     
-    // vivo系统兼容性依赖
+    // 多Dex与矢量图兼容性依赖
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("androidx.vectordrawable:vectordrawable:1.1.0")
     
